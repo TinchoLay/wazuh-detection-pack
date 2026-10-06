@@ -1,0 +1,15 @@
+# Private keys and secrets: never commit these
+*.pem
+*.key
+.env
+
+# Wazuh installer artifacts (contain generated passwords and certificates)
+wazuh-install-files.tar
+wazuh-passwords.txt
+
+# OS noise
+Thumbs.db
+.DS_Store
+
+# Raw, uncurated screenshots (may show IPs, account data, bookmarks): only curated files in evidence/ go to the repo
+evidence/Captura de pantalla*.png
