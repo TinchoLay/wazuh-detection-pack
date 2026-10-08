@@ -1,0 +1,164 @@
+{
+  "name": "Wazuh Detection Pack coverage",
+  "versions": {
+    "attack": "19",
+    "navigator": "5.1.0",
+    "layer": "4.5"
+  },
+  "domain": "enterprise-attack",
+  "description": "Techniques with at least one custom Wazuh rule that I tested (positive test, negative control, documented evasion). Score = number of rules. Having a rule does not mean full coverage of the technique: see the evasions in the README.",
+  "filters": {
+    "platforms": [
+      "Linux",
+      "IaaS"
+    ]
+  },
+  "sorting": 0,
+  "layout": {
+    "layout": "side",
+    "aggregateFunction": "average",
+    "showID": true,
+    "showName": true,
+    "showAggregateScores": false,
+    "countUnscored": false,
+    "expandedSubtechniques": "annotated"
+  },
+  "hideDisabled": false,
+  "techniques": [
+    {
+      "techniqueID": "T1033",
+      "score": 1,
+      "comment": "Wazuh rules: 100100",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1036.003",
+      "score": 2,
+      "comment": "Wazuh rules: 100101, 100102",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1046",
+      "score": 1,
+      "comment": "Wazuh rules: 100140",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1059.006",
+      "score": 1,
+      "comment": "Wazuh rules: 100130",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1070.003",
+      "score": 3,
+      "comment": "Wazuh rules: 100200, 100201, 100202",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1070.004",
+      "score": 2,
+      "comment": "Wazuh rules: 100161, 100190",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1098.004",
+      "score": 2,
+      "comment": "Wazuh rules: 100160, 100161",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1105",
+      "score": 3,
+      "comment": "Wazuh rules: 100110, 100111, 100112",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1136.001",
+      "score": 1,
+      "comment": "Wazuh rules: 100153",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1219",
+      "score": 1,
+      "comment": "Wazuh rules: 100141",
+      "enabled": true,
+      "showSubtechniques": false
+    },
+    {
+      "techniqueID": "T1222.002",
+      "score": 1,
+      "comment": "Wazuh rules: 100152",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1543.002",
+      "score": 2,
+      "comment": "Wazuh rules: 100170, 100171",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1552.005",
+      "score": 4,
+      "comment": "Wazuh rules: 100120, 100121, 100131, 100132",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1574.006",
+      "score": 1,
+      "comment": "Wazuh rules: 100180",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1685.004",
+      "score": 2,
+      "comment": "Wazuh rules: 100162, 100163",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1685.006",
+      "score": 3,
+      "comment": "Wazuh rules: 100190, 100191, 100192",
+      "enabled": true,
+      "showSubtechniques": true
+    },
+    {
+      "techniqueID": "T1686",
+      "score": 3,
+      "comment": "Wazuh rules: 100133, 100150, 100151",
+      "enabled": true,
+      "showSubtechniques": false
+    }
+  ],
+  "gradient": {
+    "colors": [
+      "#c6dbef",
+      "#08519c"
+    ],
+    "minValue": 1,
+    "maxValue": 4
+  },
+  "legendItems": [],
+  "metadata": [],
+  "links": [],
+  "showTacticRowBackground": false,
+  "tacticRowBackground": "#dddddd",
+  "selectTechniquesAcrossTactics": true,
+  "selectSubtechniquesWithParent": false,
+  "selectVisibleTechniques": false
+}

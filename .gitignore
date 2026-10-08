@@ -13,3 +13,6 @@ Thumbs.db
 
 # Raw, uncurated screenshots (may show IPs, account data, bookmarks): only curated files in evidence/ go to the repo
 evidence/Captura de pantalla*.png
+
+*.bak
+*.bak.*

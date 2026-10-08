@@ -1,0 +1,34 @@
+title: Shell History File Deleted or Renamed
+id: 1d3a1eb0-0f1d-4947-b7ed-82fc8970fd8e
+status: experimental
+description: |
+    Detects a shell history file (.bash_history, .zsh_history, .sh_history) being deleted
+    or renamed over, as seen in T1070.003 (Clear Command History).
+    SigmaHQ's "Suspicious History File Operations - Linux" (eae8ce9f-bde9-47a6-8e79-f20d18419910)
+    looks at command lines (EXECVE). This rule looks at the file system event (PATH, DELETE),
+    so it also fires when the history is replaced without a visible command, for example
+    "history -w" (temp file plus rename) or a script calling unlink.
+    Needs an auditd watch on the home directories (-w /home/<user>/.bash_history -p wa).
+    Truncation ("> ~/.bash_history", "truncate -s 0") produces no DELETE record and is not
+    covered here; the Wazuh rules 100201 and 100202 handle those.
+references:
+    - https://attack.mitre.org/techniques/T1070/003/
+    - https://github.com/SigmaHQ/sigma/blob/master/rules/linux/auditd/execve/lnx_auditd_susp_histfile_operations.yml
+author: Martin Chancalay
+date: 2026-10-08
+tags:
+    - attack.stealth
+    - attack.t1070.003
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        type: 'PATH'
+        nametype: 'DELETE'
+        name|re: '^/(home/[^/]+|root)/\.(bash|zsh|sh)_history$'
+    condition: selection
+falsepositives:
+    - A user or script that legitimately rotates its history file
+    - 'The command history -w, or a shell exit with a changed HISTFILESIZE, can rewrite the file via rename'
+level: medium

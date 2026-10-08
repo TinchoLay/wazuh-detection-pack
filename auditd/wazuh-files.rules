@@ -1,0 +1,7 @@
+-w /home/ubuntu/.ssh -p wa -k audit-wazuh-w
+-w /root/.ssh -p wa -k audit-wazuh-w
+-w /etc/systemd/system -p wa -k audit-wazuh-w
+-w /etc/ld.so.preload -p wa -k audit-wazuh-w
+-w /var/log -p wa -k audit-wazuh-w
+-w /home/ubuntu/.bash_history -p wa -k audit-wazuh-w
+-w /root/.bash_history -p wa -k audit-wazuh-w

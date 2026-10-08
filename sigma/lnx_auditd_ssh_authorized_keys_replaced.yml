@@ -1,0 +1,35 @@
+title: SSH authorized_keys File Created or Deleted
+id: a674ca82-fa5c-493d-80b1-7392e667cdc5
+status: experimental
+description: |
+    Detects an authorized_keys or authorized_keys2 file being created or removed
+    (including the rename-over pattern used by "sed -i" and by editors).
+    Adversaries add their own public key to keep SSH access (T1098.004), as TeamTNT does.
+    This rule needs an auditd watch on the .ssh directories (-w /home/<user>/.ssh -p wa),
+    because without it auditd records no PATH events for these files.
+    It does not see a plain append such as "echo key >> authorized_keys": that creates no
+    CREATE or DELETE record and is only caught by the equivalent Wazuh rule 100160.
+references:
+    - https://attack.mitre.org/techniques/T1098/004/
+    - https://attack.mitre.org/groups/G0139/
+author: Martin Chancalay
+date: 2026-10-08
+tags:
+    - attack.persistence
+    - attack.t1098.004
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        type: 'PATH'
+        nametype:
+            - 'CREATE'
+            - 'DELETE'
+        name|endswith:
+            - '/.ssh/authorized_keys'
+            - '/.ssh/authorized_keys2'
+    condition: selection
+falsepositives:
+    - Administrators or provisioning tools (cloud-init, Ansible, ssh-copy-id) managing keys
+level: medium

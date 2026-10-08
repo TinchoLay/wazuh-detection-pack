@@ -54,3 +54,348 @@
     <group>audit_command,defense_evasion,</group>
   </rule>
 </group>
+
+<group name="local,audit,">
+  <rule id="100103" level="3">
+    <if_sid>100100</if_sid>
+    <field name="audit.uid" type="pcre2">^0$</field>
+    <field name="audit.tty" type="pcre2">^\(none\)$</field>
+    <description>Audit: User discovery command run as root without a terminal: $(audit.command) by auid $(audit.auid)</description>
+    <group>audit_command,discovery,</group>
+  </rule>
+</group>
+
+<!-- TeamTNT (G0139) - T1105 Ingress Tool Transfer -->
+<group name="local,audit,">
+  <rule id="100110" level="4">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^(curl|wget)$</field>
+    <description>Audit: Download tool executed: $(audit.command) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+    <group>audit_command,command_and_control,</group>
+  </rule>
+
+  <!-- v2: also accepts options fused to the path (-o/tmp/x, --output-document=/tmp/x) -->
+  <rule id="100111" level="10">
+    <if_sid>100110</if_sid>
+    <regex type="pcre2">\sa\d+="(-{1,2}[\w-]*=?)?(/tmp|/var/tmp|/dev/shm)/</regex>
+    <description>Audit: Download tool with a temporary directory in its arguments: $(audit.command) $(audit.execve.a1) $(audit.execve.a2)</description>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+    <group>audit_command,command_and_control,</group>
+  </rule>
+
+  <!-- Catches relative output paths: lower confidence than 100111, accepts false positives -->
+  <rule id="100112" level="8">
+    <if_sid>100110</if_sid>
+    <field name="audit.cwd" type="pcre2">^(/tmp|/var/tmp|/dev/shm)(/|$)</field>
+    <description>Audit: Download tool run from a temporary working directory (cwd $(audit.cwd)): $(audit.command)</description>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+    <group>audit_command,command_and_control,</group>
+  </rule>
+</group>
+
+<!-- TeamTNT (G0139) - T1552.005 Cloud Instance Metadata API -->
+<group name="local,audit,">
+  <!-- v2: also matches the IMDS IP written as decimal, hex, octal or IPv4-mapped IPv6.
+       Known residual evasion: mixed forms such as 169.16689662, and non-curl/wget clients. -->
+  <rule id="100120" level="9">
+    <if_sid>100110</if_sid>
+    <regex type="pcre2">169\.254\.169\.254|fd00:ec2::254|instance-data|\b2852039166\b|0[xX][aA]9[fF][eE][aA]9[fF][eE]|0251\.0376\.0251\.0376|\[::ffff:a9fe:a9fe\]</regex>
+    <description>Audit: Instance metadata service (IMDS) accessed with $(audit.command) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>audit_command,credential_access,</group>
+  </rule>
+
+  <rule id="100121" level="12">
+    <if_sid>100120</if_sid>
+    <regex type="pcre2">security-credentials</regex>
+    <description>Audit: IAM role credentials requested from the IMDS with $(audit.command) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>audit_command,credential_access,</group>
+  </rule>
+</group>
+
+<!-- TeamTNT (G0139) - Python gap.
+     Stock rule 92600 (level 0) swallows every Python execution, so the curl/wget chain
+     never sees IMDS access done from Python. These rules hang off 92600 instead.
+     Stock 92601 (script run from /tmp) still wins over them for scripts in /tmp. -->
+<group name="local,audit,">
+  <rule id="100130" level="3">
+    <if_sid>92600</if_sid>
+    <description>Audit: Python interpreter executed: $(audit.exe) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1059.006</id>
+    </mitre>
+    <group>audit_command,execution,</group>
+  </rule>
+
+  <!-- Plain-text and hex-encoded variants: auditd hex-encodes arguments that contain spaces -->
+  <rule id="100131" level="9">
+    <if_sid>100130</if_sid>
+    <regex type="pcre2">169\.254\.169\.254|fd00:ec2::254|instance-data|3136392E3235342E3136392E323534</regex>
+    <description>Audit: Instance metadata service (IMDS) referenced by a Python process, auid $(audit.auid)</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>audit_command,credential_access,</group>
+  </rule>
+
+  <rule id="100132" level="12">
+    <if_sid>100131</if_sid>
+    <regex type="pcre2">security-credentials|73656375726974792D63726564656E7469616C73</regex>
+    <description>Audit: IAM role credentials requested from the IMDS by a Python process, auid $(audit.auid)</description>
+    <mitre>
+      <id>T1552.005</id>
+    </mitre>
+    <group>audit_command,credential_access,</group>
+  </rule>
+
+  <!-- ufw is a Python script, so its own event arrives as a child of 100130 (the stock rule 92600 hides Python). -->
+  <rule id="100133" level="10">
+    <if_sid>100130</if_sid>
+    <field name="audit.command" type="pcre2">^ufw$</field>
+    <regex type="pcre2">\sa\d+="(disable|reset)"</regex>
+    <description>Audit: Firewall disabled or reset with ufw: $(audit.execve.a1) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+    <group>audit_command,defense_evasion,</group>
+  </rule>
+</group>
+
+<!-- TeamTNT (G0139) - T1046 scanners and T1219 tmate, matched by binary name.
+     Name-based on purpose: a renamed copy escapes (documented evasion). -->
+<group name="local,audit,">
+  <rule id="100140" level="8">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^(masscan|zmap|zgrab2?)$</field>
+    <description>Audit: Network scanner executed: $(audit.command) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+    <group>audit_command,discovery,</group>
+  </rule>
+
+  <rule id="100141" level="10">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^tmate$</field>
+    <description>Audit: tmate (remote terminal sharing) executed by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1219</id>
+    </mitre>
+    <group>audit_command,command_and_control,</group>
+  </rule>
+</group>
+
+<!-- TeamTNT (G0139) - firewall tampering, chattr, local accounts.
+     T1562.004 is the ID Wazuh 4.14.8 accepts for the firewall technique (ATT&CK v19 calls it T1686). -->
+<group name="local,audit,">
+  <rule id="100150" level="5">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^(iptables|ip6tables|ufw)$</field>
+    <description>Audit: Firewall tool executed: $(audit.command) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+    <group>audit_command,defense_evasion,</group>
+  </rule>
+
+  <!-- Known gap: "iptables -P INPUT ACCEPT" opens the firewall without -F or disable.
+       Known noise: "ufw disable" runs iptables/ip6tables over a hundred times. ignore="60" keeps one level 10 alert per
+       minute; the rest of the events in that window fall back to 100150 (level 5). Rule 100133 reports the ufw command itself. -->
+  <rule id="100151" level="10" ignore="60">
+    <if_sid>100150</if_sid>
+    <regex type="pcre2">\sa\d+="(-F|--flush|disable|reset)"</regex>
+    <description>Audit: Firewall flushed or disabled: $(audit.command) $(audit.execve.a1)</description>
+    <mitre>
+      <id>T1562.004</id>
+    </mitre>
+    <group>audit_command,defense_evasion,</group>
+  </rule>
+
+  <rule id="100152" level="8">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^chattr$</field>
+    <description>Audit: File attributes changed with chattr: $(audit.execve.a1) $(audit.execve.a2) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1222.002</id>
+    </mitre>
+    <group>audit_command,defense_evasion,</group>
+  </rule>
+
+  <!-- v2: success=yes. useradd tries to run helpers that are not installed (sss_cache),
+       the execve fails with ENOENT, and auditd still logs it under the name useradd. -->
+  <rule id="100153" level="8">
+    <if_sid>80792</if_sid>
+    <regex type="pcre2">success=yes</regex>
+    <field name="audit.command" type="pcre2">^(useradd|adduser)$</field>
+    <description>Audit: Local account creation command: $(audit.command) by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1136.001</id>
+    </mitre>
+    <group>audit_command,persistence,</group>
+  </rule>
+
+  <!-- File watch on SSH authorized_keys. Parent 80780 is the stock "Watch - Write access" rule (key audit-wazuh-w). -->
+  <rule id="100160" level="10">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">name="[^"]*/\.ssh/authorized_keys2?"</regex>
+    <description>Audit: SSH authorized_keys modified by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1098.004</id>
+    </mitre>
+    <group>audit_watch_write,persistence,</group>
+  </rule>
+
+  <!-- Directory swap evasion: a watch on a path is bound to the inode, so moving or deleting ~/.ssh blinds it.
+       The move is logged with the key only while the watch is still attached to that directory. -->
+  <rule id="100161" level="10">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">name="[^"]*/\.ssh/?" inode=\d+ [^"]*nametype=DELETE</regex>
+    <description>Audit: SSH directory moved or deleted by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1098.004</id>
+      <id>T1070.004</id>
+    </mitre>
+    <group>persistence,defense_evasion,</group>
+  </rule>
+
+  <!-- Kernel or auditctl dropped an audit rule that carries one of the Wazuh keys. -->
+  <rule id="100162" level="10">
+    <if_sid>80705</if_sid>
+    <regex type="pcre2">op=remove_rule\s[^\n]*?key="audit-wazuh-[a-z]"</regex>
+    <description>Audit: an audit rule with a Wazuh key was removed (watch dropped or auditing tampered with)</description>
+    <mitre>
+      <id>T1562.012</id>
+    </mitre>
+    <group>audit_configuration,defense_evasion,</group>
+  </rule>
+
+  <!-- Auditing switched off with "auditctl -e 0". The log keeps the disable event, the matching enable is not logged. -->
+  <rule id="100163" level="12">
+    <if_sid>80705</if_sid>
+    <regex type="pcre2">op=set audit_enabled=0\s</regex>
+    <description>Audit: auditing was switched off (audit_enabled=0)</description>
+    <mitre>
+      <id>T1562.012</id>
+    </mitre>
+    <group>audit_configuration,defense_evasion,</group>
+  </rule>
+
+  <!-- systemd unit written directly under /etc/systemd/system (persistence). Parent 80780 is the stock write watch.
+       The wants/ symlink that "systemctl enable" creates is made by PID 1, which is not audited unless the kernel has audit=1, so without it only the command (100171) shows an enable.
+       The rule matches on the file name, so it also fires when the unit is deleted. -->
+  <rule id="100170" level="10">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">name="/etc/systemd/system/[^"/]+\.(service|timer|socket|path)"</regex>
+    <description>Audit: systemd unit file written or deleted under /etc/systemd/system by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1543.002</id>
+    </mitre>
+    <group>audit_watch_write,persistence,</group>
+  </rule>
+
+  <!-- systemctl enable, reenable or link: the only trace of a unit placed outside the watched directory (for example ~/.config/systemd/user). -->
+  <rule id="100171" level="6">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^systemctl$</field>
+    <regex type="pcre2">\sa\d+="(enable|reenable|link)"</regex>
+    <description>Audit: systemctl enable, reenable or link by auid $(audit.auid)</description>
+    <mitre>
+      <id>T1543.002</id>
+    </mitre>
+    <group>audit_command,persistence,</group>
+  </rule>
+
+  <!-- /etc/ld.so.preload created, written, replaced or deleted. The file does not exist on a clean Ubuntu 24.04, so any change is worth a high level.
+       Parent 80780 is the stock write watch. The match is on the raw file name, which also catches mv and sed -i (they log the name as CREATE and DELETE). -->
+  <rule id="100180" level="12">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">name="/etc/ld\.so\.preload"</regex>
+    <description>Audit: /etc/ld.so.preload created, written or deleted by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1574.006</id>
+    </mitre>
+    <group>audit_watch_write,persistence,defense_evasion,</group>
+  </rule>
+
+  <!-- Log deletion under /var/log (technique 10). Watch: -w /var/log. A directory watch logs every open for write of its direct children,
+       so the file side alone cannot tell rsyslog from an attacker. The filters are: a real auid (4294967295 is "unset", the daemons and the
+       scheduled logrotate) plus a destructive operation. The raw text is matched because the decoded file name is the first PATH record. -->
+  <rule id="100190" level="10" ignore="60">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">^(?=.*\sauid=(?!4294967295\s)\d+\s).*name="/var/log/[^"/]+" inode=\d+ [^"]*nametype=DELETE</regex>
+    <description>Audit: log file under /var/log deleted or renamed by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1070.002</id>
+      <id>T1070.004</id>
+    </mitre>
+    <group>audit_watch_write,defense_evasion,</group>
+  </rule>
+
+  <!-- Open with O_TRUNC (bit 0x200 of a2 on openat, shown in hex without 0x). "truncate -s 0" does not set it (a2=841), 100192 covers that one. -->
+  <rule id="100191" level="10">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">^(?=.*\ssyscall=257\s)(?=.*\sa2=[0-9a-f]*[2367abef][0-9a-f]{2}\s)(?=.*\sauid=(?!4294967295\s)\d+\s).*name="/var/log/[^"/]+" inode=\d+ [^"]*nametype=NORMAL</regex>
+    <description>Audit: log file under /var/log opened with O_TRUNC by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1070.002</id>
+    </mitre>
+    <group>audit_watch_write,defense_evasion,</group>
+  </rule>
+
+  <rule id="100192" level="10">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^(truncate|shred)$</field>
+    <regex type="pcre2">\sa\d+="/var/log/</regex>
+    <description>Audit: $(audit.command) run on a file under /var/log, auid $(audit.auid)</description>
+    <mitre>
+      <id>T1070.002</id>
+    </mitre>
+    <group>audit_command,defense_evasion,</group>
+  </rule>
+
+  <!-- Shell history destroyed (technique 10, second half). Watches on ~/.bash_history of ubuntu and root. A normal logout only appends
+       (O_APPEND) and chowns the file, so deletion and O_TRUNC are safe to alert on. "truncate -s 0" opens without O_TRUNC, hence the command rule.
+       cp is left out of the command list on purpose: a backup copy of the history would alert. -->
+  <rule id="100200" level="10">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">name="/(?:home/[^/"]+|root)/\.(?:bash|zsh|sh)_history" inode=\d+ [^"]*nametype=DELETE</regex>
+    <description>Audit: shell history file deleted or renamed by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1070.003</id>
+    </mitre>
+    <group>audit_watch_write,defense_evasion,</group>
+  </rule>
+
+  <rule id="100201" level="10">
+    <if_sid>80780</if_sid>
+    <regex type="pcre2">^(?=.*\ssyscall=257\s)(?=.*\sa2=[0-9a-f]*[2367abef][0-9a-f]{2}\s).*name="/(?:home/[^/"]+|root)/\.(?:bash|zsh|sh)_history" inode=\d+ [^"]*nametype=NORMAL</regex>
+    <description>Audit: shell history file emptied (opened with O_TRUNC) by $(audit.command), auid $(audit.auid)</description>
+    <mitre>
+      <id>T1070.003</id>
+    </mitre>
+    <group>audit_watch_write,defense_evasion,</group>
+  </rule>
+
+  <rule id="100202" level="8">
+    <if_sid>80792</if_sid>
+    <field name="audit.command" type="pcre2">^(rm|shred|truncate|ln|mv|unlink)$</field>
+    <regex type="pcre2">\sa\d+="[^"]*(?:\.bash_history|\.zsh_history|\.sh_history|fish_history)"</regex>
+    <description>Audit: $(audit.command) run on a shell history file, auid $(audit.auid)</description>
+    <mitre>
+      <id>T1070.003</id>
+    </mitre>
+    <group>audit_command,defense_evasion,</group>
+  </rule>
+</group>

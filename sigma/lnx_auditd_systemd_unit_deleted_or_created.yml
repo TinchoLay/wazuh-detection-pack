@@ -1,0 +1,40 @@
+title: Systemd Unit File Created or Deleted in /etc/systemd/system
+id: 9a084fc5-e995-4968-ae3c-db7de7b3a806
+status: experimental
+description: |
+    Detects a service, timer, socket or path unit being created or deleted under
+    /etc/systemd/system. Persistence through systemd units is T1543.002.
+    SigmaHQ already has "Systemd Service Creation" (1bac86ba-41aa-4f62-9d6b-405eac99b485),
+    which only looks at nametype CREATE and any file in the directory. This one adds
+    DELETE (a unit removed after use is a cleanup sign) and limits the name to real unit
+    suffixes. It is a complement, not a replacement.
+    Needs an auditd watch on /etc/systemd/system (-p wa). Editing an existing unit in
+    place is not covered here (no CREATE record), the Wazuh rule 100170 does cover it.
+references:
+    - https://attack.mitre.org/techniques/T1543/002/
+    - https://github.com/SigmaHQ/sigma/blob/master/rules/linux/auditd/path/lnx_auditd_systemd_service_creation.yml
+author: Martin Chancalay
+date: 2026-10-08
+tags:
+    - attack.persistence
+    - attack.privilege-escalation
+    - attack.t1543.002
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        type: 'PATH'
+        nametype:
+            - 'CREATE'
+            - 'DELETE'
+        name|startswith: '/etc/systemd/system/'
+        name|endswith:
+            - '.service'
+            - '.timer'
+            - '.socket'
+            - '.path'
+    condition: selection
+falsepositives:
+    - Package installs and legitimate administration (apt, systemctl edit, config management)
+level: medium
