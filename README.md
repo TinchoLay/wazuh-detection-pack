@@ -276,7 +276,7 @@ I did not install the real tools. I used harmless copies of `/usr/bin/true` name
 
 #### Firewall, chattr and local accounts (100150 to 100153)
 
-Three rules that match a command name, so they were quick to write. They also taught me the most about how one command turns into many events. In Wazuh 4.14.8 I used `T1562.004` for the firewall technique, the older ID. ATT&CK v19 calls it `T1686`.
+Three rules that match a command name, so they were quick to write. They also taught me the most about how one command turns into many events. In Wazuh 4.14.8 I first used `T1562.004` for the firewall technique, the older ID. ATT&CK v19 calls it `T1686`. The rules now carry both (see ATT&CK coverage).
 
 ![Firewall rules 100133 and 100151](evidence/100133-100151-firewall.png)
 
@@ -444,7 +444,7 @@ My predictions held except one: I expected `history -w` to alert as a truncation
 - Scanners were tested with stand-ins, not the real tools.
 - The metadata rules also match an IPv6 form and the `instance-data` hostname, but I did not test those.
 - Tested only with my own commands on one endpoint. The false-positive rate is not measured.
-- For the firewall technique I swapped `T1686` (ATT&CK v19) for `T1562.004`, which Wazuh validates. I have not confirmed that Wazuh rejects `T1686`.
+- Wazuh 4.14.8 does not reject `T1686` (`wazuh-analysisd -t` passes), but an alert from a rule that carries only `T1686` came out with no `mitre` block at all. I tested that on 100151 only.
 - `iptables -P INPUT ACCEPT` opens the firewall and is not caught by 100151.
 - 100133 only sees `ufw disable` and `ufw reset`. Anyone who skips ufw and calls `iptables` directly goes through 100151, which has the rate limit.
 - The watches cover `/home/ubuntu/.ssh` and `/root/.ssh` only. Other users, and a different `AuthorizedKeysFile` in `sshd_config`, are not covered.
@@ -492,7 +492,13 @@ The image is the SVG export from ATT&CK Navigator. The Navigator export has no b
 | T1562.012 | Disable or Modify Linux Audit System | T1685.004 (Disable or Modify Linux Audit System Log) |
 | T1070.002 | Clear Linux or Mac System Logs | T1685.006 |
 
-The layer uses the v19 ids. The rules in `local_rules.xml` still carry the old ones, because Wazuh 4.14 ships its own copy of the ATT&CK ids. I did not test whether Wazuh accepts the new ids, so I left the rules as they are for now.
+The layer uses the v19 ids. For the rules I tested what Wazuh 4.14.8 does with them:
+
+- `wazuh-analysisd -t` accepts the v19 ids and the manager restarts.
+- A rule with only `T1686` (100151) produced an alert with no `mitre` block. With `T1562.004` and `T1686` together, the alert showed both ids, the tactic "Defense Evasion" and the technique "Disable or Modify System Firewall".
+- 100190 carries `T1685.006` next to `T1070.004`. The alert showed both ids, but the technique name and tactic came only from `T1070.004`. Wazuh's own ATT&CK data predates v19 and does not know the new ids, and still shows the old tactic "Defense Evasion" instead of Stealth or Defense Impairment.
+
+So every rule with a revoked id now lists the old and the new one (100133, 100150, 100151, 100162, 100163, 100190, 100191, 100192). I verified the alerts of 100151, 100190 and 100192 only. My guess is that Wazuh drops the block when none of the ids is in its data, but I saw it on a single rule and did not read the code.
 
 What this matrix does not say: a colored cell means I wrote and tested a rule for that technique, not that the technique is covered. Each technique has many ways to be done and every rule has documented evasions. Counting rules per technique is also a weak signal, since three rules for one technique can be three views of the same event. It is a map of what I worked on, not a coverage score.
 
@@ -858,7 +864,7 @@ No instalé las herramientas reales. Usé copias inofensivas de `/usr/bin/true` 
 
 #### Firewall, chattr y cuentas locales (100150 a 100153)
 
-Tres reglas que coinciden por nombre de comando, así que fueron rápidas de escribir. También fueron las que más me enseñaron sobre cómo un comando se convierte en muchos eventos. En Wazuh 4.14.8 usé `T1562.004` para la técnica del firewall, el ID anterior. ATT&CK v19 la llama `T1686`.
+Tres reglas que coinciden por nombre de comando, así que fueron rápidas de escribir. También fueron las que más me enseñaron sobre cómo un comando se convierte en muchos eventos. En Wazuh 4.14.8 primero usé `T1562.004` para la técnica del firewall, el ID anterior. ATT&CK v19 la llama `T1686`. Las reglas ahora llevan los dos (ver Cobertura ATT&CK).
 
 ![Reglas de firewall 100133 y 100151](evidence/100133-100151-firewall.png)
 
@@ -1026,7 +1032,7 @@ Mis predicciones se cumplieron salvo una: esperaba que `history -w` alertara com
 - Los escáneres se probaron con copias inofensivas, no con las herramientas reales.
 - Las reglas de metadatos también reconocen una forma IPv6 y el nombre `instance-data`, pero no las probé.
 - Probado solo con mis comandos, en un endpoint. No medí la tasa de falsos positivos.
-- Para la técnica del firewall cambié `T1686` (ATT&CK v19) por `T1562.004`, que Wazuh valida. No confirmé que Wazuh rechace `T1686`.
+- Wazuh 4.14.8 no rechaza `T1686` (`wazuh-analysisd -t` pasa), pero una alerta de una regla que lleva solo `T1686` salió sin bloque `mitre`. Lo probé solo en la 100151.
 - `iptables -P INPUT ACCEPT` abre el firewall y la 100151 no lo ve.
 - La 100133 solo ve `ufw disable` y `ufw reset`. Quien se salta ufw y llama a `iptables` directo pasa por la 100151, que tiene el límite de frecuencia.
 - Los watches cubren solo `/home/ubuntu/.ssh` y `/root/.ssh`. Otros usuarios, y un `AuthorizedKeysFile` distinto en `sshd_config`, no están cubiertos.
@@ -1074,7 +1080,13 @@ La imagen es el export SVG de ATT&CK Navigator. El export no trae fondo, así qu
 | T1562.012 | Disable or Modify Linux Audit System | T1685.004 (Disable or Modify Linux Audit System Log) |
 | T1070.002 | Clear Linux or Mac System Logs | T1685.006 |
 
-La capa usa los IDs de v19. Las reglas de `local_rules.xml` siguen con los viejos, porque Wazuh 4.14 trae su propia copia de los IDs de ATT&CK. No probé si Wazuh acepta los nuevos, así que por ahora dejé las reglas como están.
+La capa usa los IDs de v19. Para las reglas probé qué hace Wazuh 4.14.8 con ellos:
+
+- `wazuh-analysisd -t` acepta los IDs de v19 y el manager reinicia.
+- Una regla con solo `T1686` (100151) produjo una alerta sin bloque `mitre`. Con `T1562.004` y `T1686` juntos, la alerta mostró los dos IDs, la táctica "Defense Evasion" y la técnica "Disable or Modify System Firewall".
+- La 100190 lleva `T1685.006` junto a `T1070.004`. La alerta mostró los dos IDs, pero el nombre de la técnica y la táctica vinieron solo de `T1070.004`. Los datos de ATT&CK de Wazuh son anteriores a v19, no conocen los IDs nuevos y siguen mostrando la táctica vieja "Defense Evasion" en vez de Stealth o Defense Impairment.
+
+Por eso cada regla con un ID revocado ahora lista el viejo y el nuevo (100133, 100150, 100151, 100162, 100163, 100190, 100191, 100192). Verifiqué las alertas de la 100151, la 100190 y la 100192 nada más. Mi suposición es que Wazuh descarta el bloque cuando ninguno de los IDs está en sus datos, pero lo vi en una sola regla y no leí el código.
 
 Lo que esta matriz no dice: una celda coloreada significa que escribí y probé una regla para esa técnica, no que la técnica esté cubierta. Cada técnica se puede hacer de muchas formas y cada regla tiene evasiones documentadas. Contar reglas por técnica es además una señal débil, porque tres reglas para una técnica pueden ser tres vistas del mismo evento. Es un mapa de en qué trabajé, no un puntaje de cobertura.
 

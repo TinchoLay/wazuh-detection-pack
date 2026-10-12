@@ -168,6 +168,7 @@
     <description>Audit: Firewall disabled or reset with ufw: $(audit.execve.a1) by auid $(audit.auid)</description>
     <mitre>
       <id>T1562.004</id>
+      <id>T1686</id>
     </mitre>
     <group>audit_command,defense_evasion,</group>
   </rule>
@@ -198,7 +199,8 @@
 </group>
 
 <!-- TeamTNT (G0139) - firewall tampering, chattr, local accounts.
-     T1562.004 is the ID Wazuh 4.14.8 accepts for the firewall technique (ATT&CK v19 calls it T1686). -->
+     Each revoked ID is listed together with its ATT&CK v19 replacement: Wazuh 4.14.8 drops the whole mitre block of a rule
+     when none of its IDs is in its own ATT&CK data (tested with T1686 alone), so the old ID keeps the enrichment alive. -->
 <group name="local,audit,">
   <rule id="100150" level="5">
     <if_sid>80792</if_sid>
@@ -206,6 +208,7 @@
     <description>Audit: Firewall tool executed: $(audit.command) by auid $(audit.auid)</description>
     <mitre>
       <id>T1562.004</id>
+      <id>T1686</id>
     </mitre>
     <group>audit_command,defense_evasion,</group>
   </rule>
@@ -219,6 +222,7 @@
     <description>Audit: Firewall flushed or disabled: $(audit.command) $(audit.execve.a1)</description>
     <mitre>
       <id>T1562.004</id>
+      <id>T1686</id>
     </mitre>
     <group>audit_command,defense_evasion,</group>
   </rule>
@@ -277,6 +281,7 @@
     <description>Audit: an audit rule with a Wazuh key was removed (watch dropped or auditing tampered with)</description>
     <mitre>
       <id>T1562.012</id>
+      <id>T1685.004</id>
     </mitre>
     <group>audit_configuration,defense_evasion,</group>
   </rule>
@@ -288,6 +293,7 @@
     <description>Audit: auditing was switched off (audit_enabled=0)</description>
     <mitre>
       <id>T1562.012</id>
+      <id>T1685.004</id>
     </mitre>
     <group>audit_configuration,defense_evasion,</group>
   </rule>
@@ -338,6 +344,7 @@
     <description>Audit: log file under /var/log deleted or renamed by $(audit.command), auid $(audit.auid)</description>
     <mitre>
       <id>T1070.002</id>
+      <id>T1685.006</id>
       <id>T1070.004</id>
     </mitre>
     <group>audit_watch_write,defense_evasion,</group>
@@ -350,6 +357,7 @@
     <description>Audit: log file under /var/log opened with O_TRUNC by $(audit.command), auid $(audit.auid)</description>
     <mitre>
       <id>T1070.002</id>
+      <id>T1685.006</id>
     </mitre>
     <group>audit_watch_write,defense_evasion,</group>
   </rule>
@@ -361,6 +369,7 @@
     <description>Audit: $(audit.command) run on a file under /var/log, auid $(audit.auid)</description>
     <mitre>
       <id>T1070.002</id>
+      <id>T1685.006</id>
     </mitre>
     <group>audit_command,defense_evasion,</group>
   </rule>
