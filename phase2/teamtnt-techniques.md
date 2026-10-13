@@ -34,7 +34,7 @@ Fuentes: página de ATT&CK de TeamTNT (v19, modificada el 31 jul 2026) y el aná
 ## Lo que mi lab no ve (para el README)
 
 - **T1070.003 Clear Command History (`history -c`)**: es un comando interno de la shell, sin `execve`. Alternativa: vigilar el archivo `.bash_history`, aunque el comando solo borra la memoria hasta salir de la sesión. Es la oportunidad de confirmar con una prueba mi hipótesis sobre `echo $USER`.
-- **Procesos ocultos con `ld.so.preload`**: según Unit 42, `ps` y `top` no muestran el minero ni `tmate`. auditd registra el execve en el kernel, pero lo que se ve en la máquina engaña. Es un buen caso para explicar en una entrevista por qué conviene tener telemetría fuera del propio equipo.
+- **Procesos ocultos con `ld.so.preload`**: según Unit 42, `ps` y `top` no muestran el minero ni `tmate`. auditd registra el execve en el kernel, pero lo que se ve en la máquina engaña. Es un buen caso para explicar por qué conviene tener telemetría fuera del propio equipo.
 - **Actividad de nube con credenciales robadas**: sucede en AWS, no en el endpoint.
 
 ## Nota sobre IDs de ATT&CK v19

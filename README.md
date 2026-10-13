@@ -530,7 +530,7 @@ Learning value: writing the Sigma version forced me to ask which parts of a dete
 
 After building the rules from my own manual tests, I wanted a second opinion that was not written by me. I installed Invoke-AtomicRedTeam on `endpoint-linux-01` (PowerShell 7 through snap) and ran Red Canary's atomics for three techniques I already had rules for: T1070.003 (clear shell history), T1098.004 (SSH authorized keys) and T1543.002 (systemd service). For each atomic I read the details first (`-ShowDetails`), wrote down which rule I expected to fire, ran it, and compared with the alerts on the server. Tests ran as `ubuntu` (audit uid 1000). Two of the T1543.002 tests need root, so I ran them with `sudo pwsh`.
 
-What I did not run: T1070.003 tests 8, 9 and 10, and T1543.002 test 2. I skipped them to keep the scope small before the interview, not because they failed. Each atomic was run once on one endpoint, and the predictions are mine, so this is a validation of my rules against someone else's test cases, not a coverage benchmark.
+What I did not run: T1070.003 tests 8, 9 and 10, and T1543.002 test 2. I skipped them to keep the scope small, not because they failed. Each atomic was run once on one endpoint, and the predictions are mine, so this is a validation of my rules against someone else's test cases, not a coverage benchmark.
 
 What the tests showed:
 
@@ -1146,7 +1146,7 @@ Valor de aprendizaje: escribir la versión Sigma me obligó a preguntarme qué p
 
 Después de armar las reglas a partir de mis propias pruebas manuales, quería una segunda opinión que no hubiera escrito yo. Instalé Invoke-AtomicRedTeam en `endpoint-linux-01` (PowerShell 7 con snap) y corrí los atomics de Red Canary para tres técnicas que ya tenían regla: T1070.003 (borrar el historial de la shell), T1098.004 (authorized_keys de SSH) y T1543.002 (servicio systemd). Para cada atomic leí primero el detalle (`-ShowDetails`), anoté qué regla esperaba que saltara, lo ejecuté y comparé con las alertas del servidor. Las pruebas corrieron como `ubuntu` (auid 1000). Dos de las de T1543.002 necesitan root, así que las corrí con `sudo pwsh`.
 
-Lo que no corrí: las pruebas 8, 9 y 10 de T1070.003 y la 2 de T1543.002. Las salteé para acotar el alcance antes de la entrevista, no porque hayan fallado. Cada atomic se ejecutó una vez en un solo endpoint y las predicciones son mías, así que esto es una validación de mis reglas contra casos de prueba ajenos, no una medición de cobertura.
+Lo que no corrí: las pruebas 8, 9 y 10 de T1070.003 y la 2 de T1543.002. Las salteé para acotar el alcance, no porque hayan fallado. Cada atomic se ejecutó una vez en un solo endpoint y las predicciones son mías, así que esto es una validación de mis reglas contra casos de prueba ajenos, no una medición de cobertura.
 
 Lo que mostraron las pruebas:
 
