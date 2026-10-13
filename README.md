@@ -526,6 +526,32 @@ What does not translate, and why I left it out:
 
 Learning value: writing the Sigma version forced me to ask which parts of a detection are the idea and which are Wazuh plumbing. That boundary is not obvious until you try to move the rule somewhere else.
 
+### Validation with Atomic Red Team
+
+After building the rules from my own manual tests, I wanted a second opinion that was not written by me. I installed Invoke-AtomicRedTeam on `endpoint-linux-01` (PowerShell 7 through snap) and ran Red Canary's atomics for three techniques I already had rules for: T1070.003 (clear shell history), T1098.004 (SSH authorized keys) and T1543.002 (systemd service). For each atomic I read the details first (`-ShowDetails`), wrote down which rule I expected to fire, ran it, and compared with the alerts on the server. Tests ran as `ubuntu` (audit uid 1000). Two of the T1543.002 tests need root, so I ran them with `sudo pwsh`.
+
+What I did not run: T1070.003 tests 8, 9 and 10, and T1543.002 test 2. I skipped them to keep the scope small before the interview, not because they failed. Each atomic was run once on one endpoint, and the predictions are mine, so this is a validation of my rules against someone else's test cases, not a coverage benchmark.
+
+What the tests showed:
+
+- **The ones that worked.** 100160 caught the authorized_keys test (T1098.004). 100171 caught `systemctl enable` for a user unit and for a SysV script (through `systemd-sysv-install`). 100202 caught the truncation of a history file once the test ran in the right order.
+- **100201 misses emptying a file that does not exist.** I expected an alert and got none. `ausearch` showed `nametype=CREATE` for that event, and 100201 requires `nametype=NORMAL` plus `O_TRUNC`. This is a real gap in my rule, not a test artifact.
+- **100102 is evaded by shebang scripts.** The atomic runs `/tmp/pglog`, a script. auditd records the interpreter as `exe=/usr/bin/dash` and the script path only as an argument (`a0=/bin/sh a1=/tmp/pglog`). My rule looks at `exe`, so it never fires. This also answers one row of the hypotheses table below.
+- **100170 does not cover every place a unit can live.** It saw nothing for a unit created under `~/.config/systemd/user/` or for a script created under `/etc/init.d/`, because the auditd watches I wrote do not include those paths. 100171 still caught the enable step in both cases, so the technique was visible, just not through the file rule.
+- **100170 is noisy when a unit is written line by line.** The atomic builds one unit with 14 `echo` commands and I got about 14 alerts, plus one more from systemd itself with an unset auid. That rule has no `ignore`, and 100190 does. I have not decided whether to add one.
+- **Nothing alerts on `systemctl disable` or on removing a unit from `/etc/init.d/`.** The cleanup produced only the alerts triggered by the framework itself. For a defender, removal of persistence is less interesting than creation, but it is a hole.
+- **No rule for disabling history through `.bashrc`** (T1562.003). The atomic that does it passes silently. I have no rule for it and did not write one yet.
+- **The framework triggers 100100 every time.** Invoke-AtomicRedTeam runs `whoami` and `id` at each invocation, so my own rule for discovery commands fires on the test harness. I filtered those out by hand when reading results.
+- **A service with `Restart=always` that fails quickly produced 5 alerts from 100130** (Python in a suspicious context) until systemd hit its start limit. That is the behavior I want, but it is also a volume I had not measured.
+- **Test 3 of T1543.002 gave no 100130**, even though the init script calls Python. I did not investigate why, so I am not claiming a cause.
+- **One test did not actually run.** The `history -c` variant ran under `sh`, where the builtin does not behave the same, so I do not count it as validation.
+
+I made two mistakes of my own that I left in the record. I predicted 100201 for a case where it does not apply, and I ran two tests in an order that made the first run of test 5 fail (a symlink from test 4 to `/dev/null` was still in place). Repeating test 5 in the correct order gave 100202 and a 0 byte file.
+
+Learning value: this was the first time my rules met input I did not choose, and it found four things my own testing had not (the CREATE case, the shebang evasion, the unit paths and the missing `.bashrc` rule). Writing the prediction before running each test is what made the misses visible instead of explainable after the fact.
+
+Not done from this exercise, deliberately: I have not changed 100102 or 100201 to fix the gaps. A fix needs its own test first, and I would rather document a known limit than ship an untested v2.
+
 ### Hypotheses not tested yet
 
 | Maneuver | Rule that should see it | Status |
@@ -534,7 +560,7 @@ Learning value: writing the Sigma version forced me to ask which parts of a dete
 | `cd /usr/bin; cp whoami /tmp/x` (relative path) | 100101 probably not (regex expects `/usr/bin/...`); 100102 yes when run from `/tmp` | Hypothesis |
 | `cat /usr/bin/whoami > /tmp/x` then `chmod +x` | 100101 no; 100102 yes when run from `/tmp` | Hypothesis |
 | Same, but running it from `/home/ubuntu` | None (full evasion) | Hypothesis |
-| Legitimate `#!` script run from `/tmp` | 100102 (false positive). Check which `exe` auditd records | To measure |
+| Legitimate `#!` script run from `/tmp` | I expected 100102 (false positive). Measured with Atomic Red Team: it did not fire, auditd records `exe=/usr/bin/dash` | Measured, see validation above |
 | `echo $USER` | Probably nothing (shell builtin, no `execve`) | Hypothesis |
 
 ### How to reproduce
@@ -604,6 +630,8 @@ I used an AI assistant as a guide while building this and treated its output as 
 - [x] Pick a threat group relevant to Linux (TeamTNT)
 - [ ] Core techniques: 10 of 10 have rules (T1105, T1552.005, T1046 and T1219, firewall, `chattr`, local accounts, `authorized_keys`, systemd services, `/etc/ld.so.preload`, log deletion, shell history)
 - [x] File-based techniques: `authorized_keys`, systemd services, `/etc/ld.so.preload` and log deletion
+- [x] Validation with Atomic Red Team on three techniques (T1070.003, T1098.004, T1543.002), gaps documented
+- [ ] Close the gaps found: shebang scripts (100102), CREATE case (100201), unit paths (100170), `.bashrc` history rule
 - [x] Coverage matrix in ATT&CK Navigator (layer in `navigator/`, ATT&CK v19 ids)
 - [x] Convert 2 or 3 rules to Sigma (three in `sigma/`, validated and converted to Splunk and Elasticsearch)
 - [ ] Rule for the Wazuh API spawning a shell (CVE-2025-24016, fixed in 4.9.1), after reading the original report
@@ -1114,6 +1142,32 @@ Qué no se traduce, y por qué lo dejé afuera:
 
 Valor de aprendizaje: escribir la versión Sigma me obligó a preguntarme qué parte de una detección es la idea y cuál es plomería de Wazuh. Ese límite no se ve hasta que intentás llevar la regla a otro lado.
 
+### Validación con Atomic Red Team
+
+Después de armar las reglas a partir de mis propias pruebas manuales, quería una segunda opinión que no hubiera escrito yo. Instalé Invoke-AtomicRedTeam en `endpoint-linux-01` (PowerShell 7 con snap) y corrí los atomics de Red Canary para tres técnicas que ya tenían regla: T1070.003 (borrar el historial de la shell), T1098.004 (authorized_keys de SSH) y T1543.002 (servicio systemd). Para cada atomic leí primero el detalle (`-ShowDetails`), anoté qué regla esperaba que saltara, lo ejecuté y comparé con las alertas del servidor. Las pruebas corrieron como `ubuntu` (auid 1000). Dos de las de T1543.002 necesitan root, así que las corrí con `sudo pwsh`.
+
+Lo que no corrí: las pruebas 8, 9 y 10 de T1070.003 y la 2 de T1543.002. Las salteé para acotar el alcance antes de la entrevista, no porque hayan fallado. Cada atomic se ejecutó una vez en un solo endpoint y las predicciones son mías, así que esto es una validación de mis reglas contra casos de prueba ajenos, no una medición de cobertura.
+
+Lo que mostraron las pruebas:
+
+- **Las que funcionaron.** La 100160 atrapó la prueba de authorized_keys (T1098.004). La 100171 atrapó `systemctl enable` tanto para una unidad de usuario como para un script SysV (a través de `systemd-sysv-install`). La 100202 atrapó el truncado de un archivo de historial una vez que la prueba corrió en el orden correcto.
+- **La 100201 no ve el vaciado de un archivo que no existe.** Esperaba una alerta y no hubo ninguna. `ausearch` mostró `nametype=CREATE` en ese evento, y la 100201 exige `nametype=NORMAL` más `O_TRUNC`. Es un hueco real de mi regla, no un artefacto de la prueba.
+- **La 100102 se evade con scripts con shebang.** El atomic ejecuta `/tmp/pglog`, un script. auditd registra el intérprete como `exe=/usr/bin/dash` y la ruta del script solo como argumento (`a0=/bin/sh a1=/tmp/pglog`). Mi regla mira `exe`, así que nunca salta. Esto también responde una fila de la tabla de hipótesis de más abajo.
+- **La 100170 no cubre todos los lugares donde puede vivir una unidad.** No vio nada para una unidad creada en `~/.config/systemd/user/` ni para un script creado en `/etc/init.d/`, porque los watches de auditd que escribí no incluyen esas rutas. La 100171 igual atrapó el paso de habilitarla en los dos casos, así que la técnica se vio, pero no por la regla de archivos.
+- **La 100170 hace ruido cuando la unidad se escribe línea por línea.** El atomic arma una unidad con 14 comandos `echo` y salieron unas 14 alertas, más una de systemd mismo con auid sin definir. Esa regla no tiene `ignore` y la 100190 sí. No decidí todavía si agregarlo.
+- **Nada alerta ante `systemctl disable` ni ante borrar una unidad de `/etc/init.d/`.** La limpieza solo produjo las alertas que dispara el propio framework. Para quien defiende, sacar la persistencia importa menos que crearla, pero es un agujero.
+- **No hay regla para desactivar el historial desde `.bashrc`** (T1562.003). El atomic que lo hace pasa en silencio. No tengo regla para eso y todavía no escribí una.
+- **El framework dispara la 100100 cada vez.** Invoke-AtomicRedTeam corre `whoami` y `id` en cada invocación, así que mi regla de comandos de descubrimiento salta con el propio arnés de pruebas. Los filtré a mano al leer los resultados.
+- **Un servicio con `Restart=always` que falla rápido produjo 5 alertas de la 100130** (Python en un contexto sospechoso) hasta que systemd llegó a su límite de arranques. Es el comportamiento que quiero, pero es un volumen que no había medido.
+- **La prueba 3 de T1543.002 no dio 100130**, aunque el script de init llama a Python. No lo investigué, así que no afirmo una causa.
+- **Una prueba no corrió de verdad.** La variante con `history -c` se ejecutó bajo `sh`, donde el builtin no se comporta igual, así que no la cuento como validación.
+
+Cometí dos errores propios que dejé en el registro. Predije la 100201 para un caso donde no aplica, y corrí dos pruebas en un orden que hizo fallar la primera ejecución de la prueba 5 (seguía puesto el symlink a `/dev/null` de la prueba 4). Al repetir la 5 en el orden correcto salió la 100202 y un archivo de 0 bytes.
+
+Valor de aprendizaje: fue la primera vez que mis reglas se enfrentaron a una entrada que yo no elegí, y encontró cuatro cosas que mis pruebas no habían mostrado (el caso CREATE, la evasión con shebang, las rutas de unidades y la falta de regla para `.bashrc`). Escribir la predicción antes de correr cada prueba es lo que hizo que los errores se vieran en vez de poder explicarse después.
+
+Lo que no hice a propósito: no cambié la 100102 ni la 100201 para cerrar los huecos. Un arreglo necesita su propia prueba primero, y prefiero documentar un límite conocido antes que publicar una v2 sin probar.
+
 ### Hipótesis todavía sin probar
 
 | Maniobra | Regla que debería verla | Estado |
@@ -1122,7 +1176,7 @@ Valor de aprendizaje: escribir la versión Sigma me obligó a preguntarme qué p
 | `cd /usr/bin; cp whoami /tmp/x` (ruta relativa) | La 100101 probablemente no (el regex espera `/usr/bin/...`); la 100102 sí al ejecutarlo desde `/tmp` | Hipótesis |
 | `cat /usr/bin/whoami > /tmp/x` y después `chmod +x` | La 100101 no; la 100102 sí al ejecutarlo desde `/tmp` | Hipótesis |
 | Lo mismo, pero ejecutándolo desde `/home/ubuntu` | Ninguna (evasión completa) | Hipótesis |
-| Script legítimo con `#!` ejecutado desde `/tmp` | La 100102 (falso positivo). Ver qué `exe` registra auditd | A medir |
+| Script legítimo con `#!` ejecutado desde `/tmp` | Esperaba la 100102 (falso positivo). Medido con Atomic Red Team: no saltó, auditd registra `exe=/usr/bin/dash` | Medido, ver validación arriba |
 | `echo $USER` | Probablemente nada (comando interno de la shell, sin `execve`) | Hipótesis |
 
 ### Cómo reproducirlo
@@ -1192,6 +1246,8 @@ Usé un asistente de IA como guía mientras armaba esto y traté su salida como 
 - [x] Elegir un grupo de amenaza relevante para Linux (TeamTNT)
 - [ ] Técnicas centrales: 10 de 10 tienen reglas (T1105, T1552.005, T1046 y T1219, firewall, `chattr`, cuentas locales, `authorized_keys`, servicios de systemd, `/etc/ld.so.preload`, borrado de logs, historial de la shell)
 - [x] Técnicas basadas en archivos: `authorized_keys`, servicios de systemd, `/etc/ld.so.preload` y borrado de logs
+- [x] Validación con Atomic Red Team en tres técnicas (T1070.003, T1098.004, T1543.002), huecos documentados
+- [ ] Cerrar los huecos encontrados: scripts con shebang (100102), caso CREATE (100201), rutas de unidades (100170), regla para historial en `.bashrc`
 - [x] Matriz de cobertura en ATT&CK Navigator (capa en `navigator/`, IDs de ATT&CK v19)
 - [x] Convertir 2 o 3 reglas a formato Sigma (tres en `sigma/`, validadas y convertidas a Splunk y Elasticsearch)
 - [ ] Regla para la API de Wazuh lanzando una shell (CVE-2025-24016, corregida en 4.9.1), después de leer el reporte original
