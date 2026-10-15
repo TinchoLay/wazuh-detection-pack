@@ -1,0 +1,10 @@
+<group name="honeypot,">
+
+  <rule id="100330" level="12">
+    <if_group>authentication_failed</if_group>
+    <list field="srcip" lookup="address_match_key">etc/lists/honeypot-attackers</list>
+    <description>IP vista en el honeypot ($(srcip)) intentando autenticarse en un sistema real.</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+</group>

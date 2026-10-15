@@ -1,0 +1,38 @@
+<group name="honeypot,">
+
+  <rule id="100300" level="0">
+    <decoded_as>json</decoded_as>
+    <field name="honeypot_event">\.+</field>
+    <description>Honeypot: evento registrado.</description>
+  </rule>
+
+  <rule id="100301" level="2">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^ssh_login_attempt$</field>
+    <description>Honeypot: intento de login SSH desde $(ip).</description>
+  </rule>
+
+  <rule id="100302" level="10" frequency="8" timeframe="60" ignore="60">
+    <if_matched_sid>100301</if_matched_sid>
+    <same_field>ip</same_field>
+    <description>Honeypot: fuerza bruta SSH desde $(ip).</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+  <rule id="100310" level="8">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^shell_command$</field>
+    <field name="nota" type="pcre2">Intento de descarga</field>
+    <description>Honeypot: descarga desde la shell falsa ($(command)).</description>
+    <mitre><id>T1105</id></mitre>
+  </rule>
+
+  <rule id="100320" level="12">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^malware_capture$</field>
+    <field name="virustotal.maliciosos" type="pcre2">^[1-9]</field>
+    <description>Honeypot: muestra marcada como maliciosa por VirusTotal.</description>
+    <mitre><id>T1105</id></mitre>
+  </rule>
+
+</group>
