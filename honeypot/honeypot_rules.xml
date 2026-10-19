@@ -19,6 +19,13 @@
     <mitre><id>T1110</id></mitre>
   </rule>
 
+  <rule id="100303" level="8" frequency="5" timeframe="600" ignore="600">
+    <if_matched_sid>100301</if_matched_sid>
+    <same_field>ip</same_field>
+    <description>Honeypot: fuerza bruta SSH lenta desde $(ip).</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
   <rule id="100310" level="8">
     <if_sid>100300</if_sid>
     <field name="honeypot_event">^shell_command$</field>

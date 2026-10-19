@@ -1,0 +1,68 @@
+<group name="honeypot,http,">
+
+  <!-- Base: cada request HTTP. Nivel 2: cuenta para las reglas de frecuencia
+       pero no llena el panel (log_alert_level = 3). -->
+  <rule id="100340" level="2">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^http_request$</field>
+    <description>Honeypot: request HTTP desde $(ip).</description>
+  </rule>
+
+  <!-- Exploit de GPON (Muhstik/Mirai): el comando viaja en el cuerpo del POST. -->
+  <rule id="100341" level="8">
+    <if_sid>100340</if_sid>
+    <field name="path" type="pcre2">(?i)GponForm/diag_Form</field>
+    <description>Honeypot: intento de explotacion de router GPON desde $(ip).</description>
+    <mitre><id>T1190</id></mitre>
+  </rule>
+
+  <!-- Busqueda de proxy abierto: URL absoluta (GET http://...) o CONNECT host:puerto. -->
+  <rule id="100342" level="5">
+    <if_sid>100340</if_sid>
+    <field name="path" type="pcre2">(?i)^(https?://|[\w.\-]+:\d+$)</field>
+    <description>Honeypot: busqueda de proxy abierto desde $(ip) hacia $(path).</description>
+    <mitre><id>T1595</id></mitre>
+  </rule>
+
+  <!-- Handshake T3 de WebLogic (nmap weblogic-t3-info). Llega como "metodo" t3. -->
+  <rule id="100343" level="5">
+    <if_sid>100340</if_sid>
+    <field name="method">^t3$</field>
+    <description>Honeypot: sondeo de WebLogic T3 desde $(ip).</description>
+    <mitre><id>T1595.002</id></mitre>
+  </rule>
+
+  <!-- Bytes que no son HTTP: handshake TLS, SOCKS, banners SSH, sondas propias de escaneres. -->
+  <rule id="100344" level="3">
+    <if_sid>100340</if_sid>
+    <field name="method" type="pcre2">^(?!(GET|POST|HEAD|OPTIONS|PUT|DELETE|PATCH|CONNECT|t3)$)</field>
+    <description>Honeypot: trafico que no es HTTP en el puerto web desde $(ip).</description>
+    <mitre><id>T1595</id></mitre>
+  </rule>
+
+  <!-- Sondas a aplicaciones conocidas. -->
+  <rule id="100345" level="5">
+    <if_sid>100340</if_sid>
+    <field name="path" type="pcre2">(?i)(geoserver|wp-json|wp-login|xmlrpc\.php|/hudson|/jenkins|phpmyadmin|/\.env|/\.git|actuator|/solr|manager/html)</field>
+    <description>Honeypot: sondeo de aplicacion web conocida ($(path)) desde $(ip).</description>
+    <mitre><id>T1595.002</id></mitre>
+  </rule>
+
+  <!-- Rafaga: muchos requests de la misma IP en poco tiempo. -->
+  <rule id="100346" level="5" frequency="10" timeframe="120" ignore="300">
+    <if_matched_sid>100340</if_matched_sid>
+    <same_field>ip</same_field>
+    <description>Honeypot: rafaga de requests HTTP desde $(ip).</description>
+    <mitre><id>T1595</id></mitre>
+  </rule>
+
+  <!-- FTP anonimo. -->
+  <rule id="100347" level="4">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^ftp_login_attempt$</field>
+    <field name="username" type="pcre2">(?i)^anonymous$</field>
+    <description>Honeypot: login FTP anonimo desde $(ip).</description>
+    <mitre><id>T1078</id></mitre>
+  </rule>
+
+</group>

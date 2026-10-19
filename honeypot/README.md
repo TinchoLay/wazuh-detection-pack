@@ -26,6 +26,7 @@ The honeypot writes one JSON object per line with a `honeypot_event` field (`ssh
 | 100300 | 0 | Any honeypot event (parent rule) |
 | 100301 | 2 | SSH login attempt. Below the default alert threshold (3), so it is counted but not shown |
 | 100302 | 10 | 8 login attempts from the same IP in 60 s (T1110). `ignore="60"` limits repeats |
+| 100303 | 8 | Slow brute force: 5 login attempts from the same IP in 10 minutes (T1110). Added after the first night, see below |
 | 100310 | 8 | Download attempt from the fake shell (T1105) |
 | 100320 | 12 | Captured file flagged as malicious by at least one VirusTotal engine (T1105) |
 | 100330 | 12 | Failed authentication on a real system from an IP that is in the honeypot attacker list (T1110). Defined in `honeypot_ioc_rules.xml` |
@@ -63,9 +64,40 @@ Limits, stated plainly:
 - Downloads from other ports, such as 8080, time out by design. How the code reports that failure has not been tested.
 - From the AWS documentation (not tested here): security groups do not filter traffic to the VPC DNS resolver, instance metadata or the time service. DNS therefore stays an exit path this control cannot close. Metadata access from the container is blocked separately (IMDSv2 with hop limit 1, no instance role).
 
+## First night exposed
+
+The honeypot ran with ports 2222 (fake SSH), 8080 (fake HTTP) and 2121 (fake FTP) open to the internet for about 15 hours. This is one small overnight sample, so it is a case study and not statistics.
+
+What arrived:
+- **27 HTTP requests** from about nine sources, almost all plain GETs with no credentials. Several sources sent bursts of 3 to 6 requests within seconds, which points to scripts probing multiple paths.
+- **3 SSH login attempts**, all from one source, using `root` with `123456`, `password` and `12345678`.
+- **No malware downloads and no shell commands.** Nobody got past the login, which is expected on a non-standard port.
+
+What the HTTP probes were looking for:
+
+| Path | What it tells |
+|---|---|
+| `/` (19 times) | "Is anything listening?" The first step of any scanner |
+| `/wp-json`, `/license.txt` | Looking for WordPress and its version |
+| `/hudson` | Looking for a Jenkins CI server |
+| `/login`, `/favicon.ico` | Generic login panel search and product fingerprinting |
+| `http://a7x[.]overflow[.]biz/hachk.php` | A full URL sent as the path: a test for an open proxy. The honeypot does not proxy, so nothing was fetched |
+
+Two non-HTTP payloads also arrived (a lone Arabic character and a short text block with `AS:2048`). I could not identify the second one, so I am not guessing.
+
+Nothing resembled exploitation. Everything was reconnaissance (ATT&CK T1595, active scanning).
+
+The most useful finding was the SSH source. It sent one attempt about every 30 seconds. Rule `100302` needs a burst of attempts inside 60 seconds, so this pattern would never have triggered it. That is a low and slow brute force, and it exposed a gap in my own detection that I only found because I had real traffic.
+
+I closed it with rule `100303` (5 attempts in 10 minutes, level 8). Tested two ways:
+- In `wazuh-logtest`, 12 attempts in a row: `100303` fired on the 5th event and `100302` on the 9th. I read the 9th as the 8th counted login, because the 5th was consumed by `100303`; that explanation is my interpretation, the position is the measurement. After each firing the next events fell back to `100301`, which is consistent with `ignore` working.
+- Live, 6 attempts 30 seconds apart: exactly one alert, `100303`, and no `100302`.
+
+On a fast burst both rules fire, first level 8 and then level 10, so severity escalates by itself.
+
 ## Verified and not verified
 
-Verified end to end with synthetic events (documentation IPs `203.0.113.x`): `100310`, `100320` and `100302` reach `alerts.json`, and `100301` does not (level 2, below the alert threshold of 3). Ten login attempts from one IP produced exactly one `100302` alert.
+Verified end to end with synthetic events (documentation IPs `203.0.113.x`): `100310`, `100320`, `100302` and `100303` reach `alerts.json`, and `100301` does not (level 2, below the alert threshold of 3). Ten login attempts from one IP produced exactly one `100302` alert.
 Verified after a stop and start of both instances: the honeypot container comes back on its own (`restart: unless-stopped`) and the agent reconnects to the manager.
 Verified only in `wazuh-logtest`: `100330` and the CDB lookup (simulated, see above).
 Not isolated: whether `ignore="60"` suppresses repeats. The test sent 10 attempts, which cannot reach a second burst of 8, so it does not tell `ignore` apart from the frequency counter alone.
