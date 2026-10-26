@@ -1,0 +1,132 @@
+<group name="honeypot,ssh,">
+
+  <!-- ====================================================================
+       Conexiones SSH (logs/ssh_connections.json)
+       Un evento por conexion, con el resultado: sin_banner, error_protocolo,
+       sin_autenticacion, login_fallido, autenticado_sin_shell, exec, shell.
+       ==================================================================== -->
+
+  <!-- Base: cada conexion SSH. Nivel 2: cuenta para las reglas de frecuencia
+       pero no llena el panel (log_alert_level = 3). -->
+  <rule id="100350" level="2">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^ssh_connection$</field>
+    <description>Honeypot: conexion SSH desde $(ip) (resultado: $(resultado)).</description>
+  </rule>
+
+  <!-- Escaner: toca el puerto y se va sin hablar SSH o sin intentar un login. -->
+  <rule id="100351" level="3">
+    <if_sid>100350</if_sid>
+    <field name="resultado" type="pcre2">^(sin_banner|error_protocolo)$</field>
+    <description>Honeypot: escaner SSH desde $(ip), la conexion termino sin llegar a autenticar.</description>
+    <mitre><id>T1595</id></mitre>
+  </rule>
+
+  <!-- El honeypot le acepto la contraseña. Ojo: en un servidor real esto seria
+       un acceso valido despues de adivinar la clave. El grupo honeypot_login_ok
+       lo usa la regla de frecuencia de abajo (if_matched_group). -->
+  <rule id="100352" level="6">
+    <if_sid>100350</if_sid>
+    <field name="resultado" type="pcre2">^(autenticado_sin_shell|exec|shell)$</field>
+    <description>Honeypot: $(ip) entro con credenciales aceptadas ($(resultado)).</description>
+    <group>honeypot_login_ok,</group>
+    <mitre><id>T1078</id></mitre>
+  </rule>
+
+  <!-- Igual que la anterior, pero el cliente es una libreria SSH de uso programatico
+       (Go, libssh, paramiko...), no un cliente de persona. Hijo de 100352 para que
+       sea la regla mas especifica la que dispare. -->
+  <rule id="100353" level="7">
+    <if_sid>100352</if_sid>
+    <field name="banner" type="pcre2">(?i)^SSH-2\.0-(Go|libssh|paramiko|makiko|AsyncSSH|JSCH)([_\-.].*)?$</field>
+    <description>Honeypot: $(ip) entro con una libreria SSH automatizada ($(banner)).</description>
+    <group>honeypot_login_ok,</group>
+    <mitre><id>T1078</id></mitre>
+  </rule>
+
+  <!-- Tanda: varias entradas aceptadas desde la misma IP en pocos minutos.
+       Umbral provisorio (5 en 300 s): ajustar con los datos reales. -->
+  <rule id="100354" level="9" frequency="5" timeframe="300" ignore="300">
+    <if_matched_group>honeypot_login_ok</if_matched_group>
+    <same_field>ip</same_field>
+    <description>Honeypot: $(ip) entro 5 veces en 5 minutos, validacion de credenciales en tanda.</description>
+    <mitre><id>T1110</id></mitre>
+  </rule>
+
+
+  <!-- ====================================================================
+       Comandos del atacante (logs/shell_commands.json)
+       Llegan por la shell interactiva (canal "shell") o por un comando directo
+       (canal "exec"). Las reglas miran el campo command.
+       Se evaluan en orden y dispara la PRIMERA que coincide: por eso van de
+       mas a menos grave. Un comando que ademas descarga algo tambien dispara la
+       regla 100310 (nota de descarga), que se evalua antes que este bloque.
+       ==================================================================== -->
+
+  <!-- Base: cualquier comando. -->
+  <rule id="100360" level="3">
+    <if_sid>100300</if_sid>
+    <field name="honeypot_event">^shell_command$</field>
+    <description>Honeypot: comando de $(ip) por $(canal): $(command)</description>
+  </rule>
+
+  <!-- Persistencia por clave SSH: el patron clasico de los bots (agregan su clave
+       publica a authorized_keys para volver a entrar). -->
+  <rule id="100361" level="12">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)authorized_keys</field>
+    <description>Honeypot: $(ip) intenta dejar una clave SSH propia (authorized_keys).</description>
+    <mitre><id>T1098.004</id></mitre>
+  </rule>
+
+  <!-- Criptominero: nombres de programas y el protocolo stratum de los pools. -->
+  <rule id="100362" level="12">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(xmrig|minerd|cpuminer|stratum\+(tcp|ssl)|--donate-level|nicehash|monero)</field>
+    <description>Honeypot: $(ip) intenta correr un criptominero.</description>
+    <mitre><id>T1496</id></mitre>
+  </rule>
+
+  <!-- Descargar y ejecutar en el mismo comando (wget ...; chmod +x; ./x, curl | sh). -->
+  <rule id="100363" level="10">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)\b(wget|curl|tftp|ftpget)\b.*(\|\s*(ba)?sh\b|;\s*(chmod|sh|bash|\./)|&amp;&amp;\s*(chmod|sh|bash|\./))</field>
+    <description>Honeypot: $(ip) descarga y ejecuta un archivo en el mismo comando.</description>
+    <mitre><id>T1105</id><id>T1059.004</id></mitre>
+  </rule>
+
+  <!-- Crear usuarios o cambiar contraseñas. El (?&lt;![/\w]) evita que
+       "cat /etc/passwd" se confunda con el comando passwd. -->
+  <rule id="100364" level="9">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)\b(chpasswd|useradd|adduser|usermod|userdel)\b|(?&lt;![/\w])passwd\s+\S</field>
+    <description>Honeypot: $(ip) intenta crear o modificar cuentas de usuario.</description>
+    <mitre><id>T1098</id><id>T1136.001</id></mitre>
+  </rule>
+
+  <!-- Tareas programadas. Incluye crontab -l (solo lectura): sigue siendo
+       interes del atacante en la persistencia, por eso nivel 7 y no mas. -->
+  <rule id="100365" level="7">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(\bcrontab\b|/etc/cron|/var/spool/cron)</field>
+    <description>Honeypot: $(ip) toca tareas programadas (cron).</description>
+    <mitre><id>T1053.003</id></mitre>
+  </rule>
+
+  <!-- Borrar rastros: historial y logs. -->
+  <rule id="100366" level="8">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(history\s+-c|unset\s+HISTFILE|HISTFILE=/dev/null|rm\s+(-\w+\s+)*\S*(\.bash_history|/var/log)|&gt;\s*/var/log|\bshred\b)</field>
+    <description>Honeypot: $(ip) intenta borrar rastros (historial o logs).</description>
+    <mitre><id>T1070.003</id><id>T1070.002</id></mitre>
+  </rule>
+
+  <!-- Reconocimiento del sistema: lo primero que hace casi cualquier bot. -->
+  <rule id="100367" level="5">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(\buname\b|/proc/(cpuinfo|meminfo)|\bnproc\b|\blscpu\b|/etc/(os-release|issue|passwd)|\bfree\s+-[mgh]\b|\bwhoami\b)</field>
+    <description>Honeypot: $(ip) hace reconocimiento del sistema ($(command)).</description>
+    <mitre><id>T1082</id><id>T1033</id></mitre>
+  </rule>
+
+</group>
