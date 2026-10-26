@@ -95,11 +95,11 @@
     <mitre><id>T1105</id><id>T1059.004</id></mitre>
   </rule>
 
-  <!-- Crear usuarios o cambiar contrasenas. El (?&lt;![/\w]) evita que
-       "cat /etc/passwd" se confunda con el comando passwd. -->
+  <!-- Crear usuarios o cambiar contrasenas. passwd solo cuenta como comando
+       (al inicio o despues de un separador), asi "cat /etc/passwd" no se confunde. -->
   <rule id="100364" level="9">
     <if_sid>100360</if_sid>
-    <field name="command" type="pcre2">(?i)\b(chpasswd|useradd|adduser|usermod|userdel)\b|(?&lt;![/\w])passwd\s+\S</field>
+    <field name="command" type="pcre2">(?i)\b(chpasswd|useradd|adduser|usermod|userdel)\b|(?:^|[\s;&amp;|])passwd(?:\s|$)</field>
     <description>Honeypot: $(ip) intenta crear o modificar cuentas de usuario.</description>
     <mitre><id>T1098</id><id>T1136.001</id></mitre>
   </rule>
@@ -116,7 +116,7 @@
   <!-- Borrar rastros: historial y logs. -->
   <rule id="100366" level="8">
     <if_sid>100360</if_sid>
-    <field name="command" type="pcre2">(?i)(history\s+-c|unset\s+HISTFILE|HISTFILE=/dev/null|rm\s+(-\w+\s+)*\S*(\.bash_history|/var/log)|&gt;\s*/var/log|\bshred\b)</field>
+    <field name="command" type="pcre2">(?i)(history\s+-c|unset\s+HISTFILE|HISTFILE=/dev/null|rm\s+(-\w+\s+)*\S*(\.bash_history|/var/log)|\x3e\s*/var/log|\bshred\b)</field>
     <description>Honeypot: $(ip) intenta borrar rastros (historial o logs).</description>
     <mitre><id>T1070.003</id><id>T1070.002</id></mitre>
   </rule>
