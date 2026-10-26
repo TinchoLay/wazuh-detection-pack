@@ -22,7 +22,7 @@
     <mitre><id>T1595</id></mitre>
   </rule>
 
-  <!-- El honeypot le acepto la contraseña. Ojo: en un servidor real esto seria
+  <!-- El honeypot le acepto la contrasena. Ojo: en un servidor real esto seria
        un acceso valido despues de adivinar la clave. El grupo honeypot_login_ok
        lo usa la regla de frecuencia de abajo (if_matched_group). -->
   <rule id="100352" level="6">
@@ -95,7 +95,7 @@
     <mitre><id>T1105</id><id>T1059.004</id></mitre>
   </rule>
 
-  <!-- Crear usuarios o cambiar contraseñas. El (?&lt;![/\w]) evita que
+  <!-- Crear usuarios o cambiar contrasenas. El (?&lt;![/\w]) evita que
        "cat /etc/passwd" se confunda con el comando passwd. -->
   <rule id="100364" level="9">
     <if_sid>100360</if_sid>
