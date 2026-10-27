@@ -68,12 +68,13 @@
 
 # --- Correlacion (100370) ---
 # En una misma sesion de wazuh-logtest: pegar 8 veces seguidas (menos de 60 s) esta linea
-# para que salte 100302 (fuerza bruta) ...
+# para que salte la fuerza bruta (con 8 salta 100303 a la 5.a; 100302 necesitaria una novena) ...
 {"timestamp": "2026-10-27 16:01:00", "honeypot_event": "ssh_login_attempt", "ip": "203.0.113.33", "username": "root", "password": "admin"}
 # ... y despues, de la misma IP, esta (deberia disparar 100370, nivel 12):
 {"timestamp": "2026-10-27 16:01:20", "honeypot_event": "ssh_connection", "ip": "203.0.113.33", "resultado": "autenticado_sin_shell", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 11.0, "intentos_login": 3}
 
-# --- Lista CDB con CIDR (regla 100330) ---
-# Con "198.51.100.0/24:campaign-example" en etc/lists/honeypot-attackers y la lista registrada
-# en ossec.conf, esta linea de sshd debe dar 100330 (si da 5760, el CIDR no se esta aplicando):
+# --- Lista CDB (regla 100330) ---
+# Con "198.51.100.77:ejemplo-campania" en etc/lists/honeypot-attackers (IP EXACTA: un rango CIDR no
+# coincide en 4.14.8) y la lista registrada en ossec.conf, esta linea de sshd debe dar 100330.
+# Con una IP que no esta en la lista da 5760:
 Oct 27 16:02:00 ip-172-31-33-195 sshd[1234]: Failed password for root from 198.51.100.77 port 4444 ssh2

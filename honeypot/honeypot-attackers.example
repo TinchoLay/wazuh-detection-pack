@@ -1,4 +1,5 @@
-# Formato: IP o red CIDR, dos puntos, etiqueta. Son direcciones de documentacion (RFC 5737).
+# Formato: una IP por linea, dos puntos, etiqueta. Son direcciones de documentacion (RFC 5737).
+# Un rango CIDR (a.b.c.0/24) NO coincide en Wazuh 4.14.8: probado, ver README. Para una red, una linea por IP.
 # La lista real va en /var/ossec/etc/lists/honeypot-attackers y no se publica.
 203.0.113.70:honeypot
-198.51.100.0/24:campaign-example
+198.51.100.77:ejemplo-campania

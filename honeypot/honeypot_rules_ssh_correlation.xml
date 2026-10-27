@@ -7,8 +7,10 @@
        que la regla 40112 de fabrica ("varios fallos y despues un exito").
        Ojo con el honeypot: acepta la contrasena en el 3.er intento por diseno, asi que
        aca "entro despues de forzar" es el comportamiento esperado, no una falla del
-       servidor. En un SSH real esto seria un incidente de nivel alto. -->
-  <rule id="100370" level="12" timeframe="600">
+       servidor. En un SSH real esto seria un incidente de nivel alto.
+       ignore="300": la campania que vimos reconecta cientos de veces; sin esto cada login
+       aceptado despues de una alerta de fuerza bruta levantaria una alerta de nivel 12. -->
+  <rule id="100370" level="12" timeframe="600" ignore="300">
     <if_sid>100352</if_sid>
     <if_matched_group>honeypot_bruteforce</if_matched_group>
     <same_field>ip</same_field>

@@ -78,7 +78,7 @@ The name `honeypot_rules_http.xml` is deliberate. Wazuh loads rule files in alph
 | 100367 | 5 | System recon: `uname`, `/proc/cpuinfo`, `nproc`, `lscpu`, `/etc/passwd`, `whoami` (T1082, T1033) |
 | 100368 | 10 | Reading password hashes: `/etc/shadow`, `/etc/gshadow` (T1003.008). Evaluated before 100367 |
 | 100369 | 6 | Shell check: random arithmetic `$((a*b+c))`, `check_<hash>` markers, `set` with arguments (T1059.004). Evaluated before 100367 |
-| 100370 | 12 | An accepted login (100352) after a brute-force alert (100302 or 100303) from the same IP within 600 s (T1110.001, T1078) |
+| 100370 | 12 | An accepted login (100352) after a brute-force alert (100302 or 100303) from the same IP within 600 s, `ignore="300"` (T1110.001, T1078) |
 
 Severity follows how much evidence there is. A login attempt or a plain GET is noise, a request to an exploit path shows intent, and a sample that VirusTotal confirms is proof.
 
@@ -194,7 +194,25 @@ I read a day of real traffic (27 October) and added four rules from what it show
 
 To feed 100368 and 100370, rules 100302 and 100303 now also belong to the group `honeypot_bruteforce`. Nothing else about them changed.
 
-As far as I know a CDB list can hold a network in CIDR form (`77.239.124.0/24:campaign`), not only single IPs. I have not tested that yet: the check is the `wazuh-logtest` line at the end of `logtest_ssh_samples.txt`. The real list stays on the server and is not published here, because it has real attacker addresses. The `.example` file shows the CIDR format with a documentation range.
+A network in CIDR form (`77.239.124.0/24:campaign`) does not work as a key in this list. I tested it on Wazuh 4.14.8: `77.239.124.50` gave the stock rule 5760, while an exact IP in the same list (`80.94.92.179`) gave 100330. The list needs one line per IP, so for a network I generate the 254 lines with a loop. I had assumed CIDR worked, because I remembered it from the documentation, and the test proved me wrong. The check for any list change is the `wazuh-logtest` line at the end of `logtest_ssh_samples.txt`. With the 254 lines of the /24 loaded, `77.239.124.50` gave 100330, `77.239.125.50` (outside the range) gave 5760 and `80.94.92.179` gave 100330. The real list stays on the server and is not published here, because it has real attacker addresses. The `.example` file shows the CIDR format with a documentation range.
+
+### Alerts that never reached the dashboard
+
+On 27 October the dashboard showed none of the honeypot alerts, while `alerts.json` on the manager had hundreds (293 with an ID starting in `1003` that day, 4 of them the 100354 rule). The services were all running. The Filebeat log had the answer, repeated for every event:
+
+```
+mapper_parsing_exception: failed to parse field [data.timestamp] of type [date] ... Preview of field's value: '2026-10-27 18:57:52'
+```
+
+The honeypot writes its own `timestamp` as `YYYY-MM-DD HH:MM:SS`. The Wazuh JSON decoder stores it as `data.timestamp`, the index template maps that field as a strict date (ISO 8601, with a `T`) and the indexer answers 400. Filebeat does not retry a 400, so every alert from these rules was dropped on the way to the indexer, from the first day. The only reason I noticed is that I looked for a rule that I knew had fired. Nothing alerted on it.
+
+The fix is on the Wazuh side, so the honeypot keeps its format: in `/etc/filebeat/wazuh-template.json`, the field `data.timestamp` gets `"format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"`. Then `filebeat setup --index-management -E output.logstash.enabled=false` and a Filebeat restart. The alternative was to write ISO dates in the honeypot, but the honeypot's own dashboard and my analysis scripts read the current format.
+
+Status:
+- Verified: the template is loaded in the indexer with the new format.
+- Not verified yet: that alerts arrive. The index template only applies to indexes created after the change, so it needs the first daily index after 00:00 UTC on 28 October.
+- Alerts from before the fix are not in the indexer. They are still in `alerts.json` and in the rotated `.json.gz` files, and could be re-sent. I have not done that.
+- A Wazuh upgrade may overwrite the template file, so this is a local change to remember.
 
 ### Port 22
 
@@ -210,7 +228,7 @@ Verified in `wazuh-logtest` and live: the HTTP and FTP set, 100340 to 100347.
 
 Verified after a stop and start of both instances: the honeypot container comes back on its own (`restart: unless-stopped`) and the agent reconnects to the manager.
 
-Verified only in `wazuh-logtest`: 100330 and the CDB lookup (simulated, see above).
+Verified only in `wazuh-logtest`: 100330 and the CDB lookup with exact IPs. A CIDR key does not match (see above).
 
 SSH connection and command rules (100350 to 100367), as of 26 October:
 - Syntax: the whole file loads with `wazuh-analysisd -t` and no errors.
@@ -220,8 +238,10 @@ SSH connection and command rules (100350 to 100367), as of 26 October:
 - Not verified: 100352 and 100354 with real events, the order in which sibling rules are evaluated, and whether real `exec` commands look like what the patterns expect. `logtest_ssh_samples.txt` has a sample for each rule.
 
 Rules added on 27 October (100348, 100368, 100369, 100370):
-- Checked only against my own Python simulator (Python's regex engine, not Wazuh's): 100368 and 100369 in 51 of 52 SSH cases, and 100348 against 13 paths. The 52nd case was the old expectation that `cat /etc/shadow` stops at 100360, which is exactly what 100368 changes. 100369 was tested with commands rebuilt from the real ones.
-- Not verified: `wazuh-analysisd -t` on the four new files, `wazuh-logtest`, and live traffic. 100370 in particular needs a sequence of events (brute-force alert first, then an accepted login from the same IP) and I have not run one.
+- `wazuh-analysisd -t` loads the four files with no errors. In `wazuh-logtest` all four gave the expected rule and level: 100348 (`/api/v1/models`), 100368 (`cat /etc/shadow`, ahead of 100367), 100369 (a command rebuilt from the real shell checks) and 100370. I had checked the patterns first in my Python simulator (51 of 52 cases; the 52nd was the old expectation that `cat /etc/shadow` stops at 100360, which 100368 changes).
+- The 100370 test was a sequence: 8 login attempts from one IP, then an accepted login. The fifth attempt fired 100303 (slow brute force) and the accepted login fired 100370. The eighth attempt did not fire 100302. My reading is that the event that fires 100303 is not counted again for 100302, so 100302 needs a ninth. It fits what I saw live earlier (ten attempts, one 100302), but I did not isolate it.
+- 100370 has `ignore="300"` because the campaign I saw reconnects hundreds of times, and without it every accepted login after a brute-force alert would raise a level 12 alert. That is a guess about the noise, not something I measured.
+- Not verified: these four rules on live traffic. The CIDR key in the CDB list was tested and does not match (see the list section); exact IPs do.
 
 Live on 27 October, after about 20 hours on port 22: 100351, 100352, 100353, 100354, 100360 and 100367 fired on real traffic. 100361 to 100366 did not fire once, so I still do not know if their patterns match what real bots send.
 
@@ -305,7 +325,7 @@ El nombre `honeypot_rules_http.xml` es a propósito. Wazuh carga los archivos de
 | 100367 | 5 | Reconocimiento del sistema: `uname`, `/proc/cpuinfo`, `nproc`, `lscpu`, `/etc/passwd`, `whoami` (T1082, T1033) |
 | 100368 | 10 | Lectura de hashes de contraseñas: `/etc/shadow`, `/etc/gshadow` (T1003.008). Se evalúa antes que 100367 |
 | 100369 | 6 | Verificación de la shell: aritmética al azar `$((a*b+c))`, marcadores `check_<hash>`, `set` con argumentos (T1059.004). Se evalúa antes que 100367 |
-| 100370 | 12 | Un login aceptado (100352) después de una alerta de fuerza bruta (100302 o 100303) desde la misma IP en 600 s (T1110.001, T1078) |
+| 100370 | 12 | Un login aceptado (100352) después de una alerta de fuerza bruta (100302 o 100303) desde la misma IP en 600 s, `ignore="300"` (T1110.001, T1078) |
 
 La severidad sigue cuánta evidencia hay. Un intento de login o un GET simple es ruido, un request a una ruta de exploit muestra intención y una muestra que VirusTotal confirma es una prueba.
 
@@ -421,7 +441,25 @@ Leí un día de tráfico real (27 de octubre) y sumé cuatro reglas a partir de 
 
 Para alimentar 100368 y 100370, las reglas 100302 y 100303 ahora también pertenecen al grupo `honeypot_bruteforce`. No cambió nada más de ellas.
 
-Hasta donde sé, una lista CDB puede tener una red en formato CIDR (`77.239.124.0/24:campaign`), no solo IPs sueltas. Todavía no lo probé: la comprobación es la línea de `wazuh-logtest` al final de `logtest_ssh_samples.txt`. La lista real queda en el servidor y no se publica acá, porque tiene direcciones reales de atacantes. El archivo `.example` muestra el formato CIDR con un rango de documentación.
+Una red en formato CIDR (`77.239.124.0/24:campaign`) no funciona como clave en esta lista. Lo probé en Wazuh 4.14.8: `77.239.124.50` dio la regla de fábrica 5760, mientras que una IP exacta de la misma lista (`80.94.92.179`) dio 100330. La lista necesita una línea por IP, así que para una red genero las 254 líneas con un bucle. Yo había dado por hecho que CIDR funcionaba, porque lo recordaba de la documentación, y la prueba me desmintió. La comprobación para cualquier cambio de la lista es la línea de `wazuh-logtest` al final de `logtest_ssh_samples.txt`. Con las 254 líneas de la /24 cargadas, `77.239.124.50` dio 100330, `77.239.125.50` (fuera del rango) dio 5760 y `80.94.92.179` dio 100330. La lista real queda en el servidor y no se publica acá, porque tiene direcciones reales de atacantes. El archivo `.example` muestra el formato CIDR con un rango de documentación.
+
+### Alertas que nunca llegaron al dashboard
+
+El 27 de octubre el dashboard no mostraba ninguna alerta del honeypot, mientras que `alerts.json` en el manager tenía cientos (293 con un ID que empieza en `1003` ese día, 4 de ellas de la regla 100354). Todos los servicios estaban corriendo. La respuesta estaba en el log de Filebeat, repetida en cada evento:
+
+```
+mapper_parsing_exception: failed to parse field [data.timestamp] of type [date] ... Preview of field's value: '2026-10-27 18:57:52'
+```
+
+El honeypot escribe su propio `timestamp` como `AAAA-MM-DD HH:MM:SS`. El decoder JSON de Wazuh lo guarda como `data.timestamp`, la plantilla del índice mapea ese campo como fecha estricta (ISO 8601, con una `T`) y el indexer contesta 400. Filebeat no reintenta un 400, así que todas las alertas de estas reglas se perdían en el camino al indexer, desde el primer día. Me di cuenta solo porque busqué una regla que sabía que había saltado. Nada avisó de esto.
+
+El arreglo es del lado de Wazuh, para que el honeypot conserve su formato: en `/etc/filebeat/wazuh-template.json`, el campo `data.timestamp` recibe `"format": "yyyy-MM-dd HH:mm:ss||strict_date_optional_time||epoch_millis"`. Después `filebeat setup --index-management -E output.logstash.enabled=false` y reiniciar Filebeat. La alternativa era escribir fechas ISO en el honeypot, pero su propio dashboard y mis scripts de análisis leen el formato actual.
+
+Estado:
+- Verificado: la plantilla está cargada en el indexer con el formato nuevo.
+- Todavía no verificado: que lleguen las alertas. La plantilla solo se aplica a los índices creados después del cambio, así que hace falta el primer índice diario posterior a las 00:00 UTC del 28 de octubre.
+- Las alertas anteriores al arreglo no están en el indexer. Siguen en `alerts.json` y en los `.json.gz` rotados, y se podrían reenviar. No lo hice.
+- Una actualización de Wazuh puede pisar el archivo de la plantilla, así que es un cambio local para recordar.
 
 ### Puerto 22
 
@@ -437,7 +475,7 @@ Verificado en `wazuh-logtest` y en vivo: el conjunto HTTP y FTP, de 100340 a 100
 
 Verificado después de apagar y prender las dos instancias: el contenedor del honeypot vuelve solo (`restart: unless-stopped`) y el agente se reconecta al manager.
 
-Verificado solo en `wazuh-logtest`: 100330 y la búsqueda en la CDB (simulado, ver arriba).
+Verificado solo en `wazuh-logtest`: 100330 y la búsqueda en la CDB con IPs exactas. Una clave CIDR no coincide (ver arriba).
 
 Reglas de conexión SSH y de comandos (100350 a 100367), al 26 de octubre:
 - Sintaxis: el archivo completo carga con `wazuh-analysisd -t` y sin errores.
@@ -447,8 +485,10 @@ Reglas de conexión SSH y de comandos (100350 a 100367), al 26 de octubre:
 - No verificado: 100352 y 100354 con eventos reales, el orden en que se evalúan las reglas hermanas, y si los comandos `exec` reales se parecen a lo que esperan los patrones. `logtest_ssh_samples.txt` tiene un ejemplo para cada regla.
 
 Reglas agregadas el 27 de octubre (100348, 100368, 100369, 100370):
-- Comprobado solo con mi simulador en Python (motor de regex de Python, no el de Wazuh): 100368 y 100369 en 51 de 52 casos SSH, y 100348 contra 13 rutas. El caso 52 era la expectativa vieja de que `cat /etc/shadow` se quedaba en 100360, que es justo lo que cambia 100368. 100369 se probó con comandos reconstruidos a partir de los reales.
-- No verificado: `wazuh-analysisd -t` sobre los cuatro archivos, `wazuh-logtest` y tráfico en vivo. 100370 en particular necesita una secuencia de eventos (primero la alerta de fuerza bruta y después un login aceptado de la misma IP) y no corrí ninguna.
+- `wazuh-analysisd -t` carga los cuatro archivos sin errores. En `wazuh-logtest` las cuatro dieron la regla y el nivel esperados: 100348 (`/api/v1/models`), 100368 (`cat /etc/shadow`, antes que 100367), 100369 (un comando reconstruido a partir de los chequeos reales de la shell) y 100370. Antes había comprobado los patrones en mi simulador de Python (51 de 52 casos; el 52 era la expectativa vieja de que `cat /etc/shadow` se quedaba en 100360, que 100368 cambia).
+- La prueba de 100370 fue una secuencia: 8 intentos de login desde una IP y después un login aceptado. El quinto intento disparó 100303 (fuerza bruta lenta) y el login aceptado disparó 100370. El octavo intento no disparó 100302. Mi lectura es que el evento que dispara 100303 no se cuenta de nuevo para 100302, así que 100302 necesita un noveno. Coincide con lo que vi en vivo antes (diez intentos, una 100302), pero no lo aislé.
+- 100370 tiene `ignore="300"` porque la campaña que vi reconecta cientos de veces, y sin eso cada login aceptado después de una alerta de fuerza bruta levantaría una alerta de nivel 12. Es una suposición sobre el ruido, no algo que haya medido.
+- No verificado: estas cuatro reglas con tráfico en vivo. La clave CIDR en la lista CDB se probó y no coincide (ver la sección de la lista); las IPs exactas sí.
 
 En vivo el 27 de octubre, después de unas 20 horas en el puerto 22: 100351, 100352, 100353, 100354, 100360 y 100367 saltaron con tráfico real. 100361 a 100366 no saltaron ni una vez, así que todavía no sé si sus patrones coinciden con lo que mandan los bots reales.
 
