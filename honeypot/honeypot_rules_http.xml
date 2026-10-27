@@ -48,6 +48,16 @@
     <mitre><id>T1595.002</id></mitre>
   </rule>
 
+  <!-- Sondeo de APIs de modelos de IA (OpenAI, Anthropic, Gemini, Ollama...): buscan
+       endpoints abiertos para usar el modelo de otro sin pagar. Va antes de la rafaga
+       y no se pisa con 100345 porque los patrones no se solapan. -->
+  <rule id="100348" level="6">
+    <if_sid>100340</if_sid>
+    <field name="path" type="pcre2">(?i)(/v1/(models|chat/completions|completions|embeddings|messages)|/v1beta/models|/api/(v1/)?models|/api/(tags|generate|chat)\b|/openai/v1|/ollama/)</field>
+    <description>Honeypot: sondeo de API de modelos de IA ($(path)) desde $(ip).</description>
+    <mitre><id>T1595.002</id></mitre>
+  </rule>
+
   <!-- Rafaga: muchos requests de la misma IP en poco tiempo. -->
   <rule id="100346" level="5" frequency="10" timeframe="120" ignore="300">
     <if_matched_sid>100340</if_matched_sid>

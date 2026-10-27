@@ -48,9 +48,32 @@
 {"timestamp": "2026-10-26 21:01:07", "honeypot_event": "shell_command", "ip": "203.0.113.27", "command": "history -c", "canal": "shell", "nota": ""}
 
 # (100360) comando sin patron conocido: solo base. Probar tambien cat /etc/shadow:
-# hoy cae aca y no deberia, ver ejercicio en la conversacion.
+# (ya no cae aca: ver 100368 mas abajo)
 {"timestamp": "2026-10-26 21:01:08", "honeypot_event": "shell_command", "ip": "203.0.113.28", "command": "ls -la", "canal": "shell", "nota": ""}
 
 # --- Frecuencia (regla 100354) ---
 # Pegar 5 veces seguidas, en menos de 5 minutos, la linea de 100353 de arriba
 # (misma IP). A la quinta deberia disparar 100354.
+
+# --- Reglas agregadas el 27 de octubre ---
+
+# (100368) hashes de contrasenas: debe ganarle a 100367
+{"timestamp": "2026-10-27 16:00:01", "honeypot_event": "shell_command", "ip": "203.0.113.30", "command": "cat /etc/shadow", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100369) verificacion de la shell, como la que mando 80.94.92.179
+{"timestamp": "2026-10-27 16:00:02", "honeypot_event": "shell_command", "ip": "203.0.113.31", "command": "sh -c 'printf '\"'\"'\\n%s|%s\\n'\"'\"' check_26c845a5c579f0a359d8773a287d0ad4 \"$((956*983+35))\"'", "canal": "shell", "nota": ""}
+
+# (100348) sondeo de API de modelos de IA por HTTP
+{"timestamp": "2026-10-27 16:00:03", "honeypot_event": "http_request", "ip": "203.0.113.32", "method": "GET", "path": "/api/v1/models"}
+
+# --- Correlacion (100370) ---
+# En una misma sesion de wazuh-logtest: pegar 8 veces seguidas (menos de 60 s) esta linea
+# para que salte 100302 (fuerza bruta) ...
+{"timestamp": "2026-10-27 16:01:00", "honeypot_event": "ssh_login_attempt", "ip": "203.0.113.33", "username": "root", "password": "admin"}
+# ... y despues, de la misma IP, esta (deberia disparar 100370, nivel 12):
+{"timestamp": "2026-10-27 16:01:20", "honeypot_event": "ssh_connection", "ip": "203.0.113.33", "resultado": "autenticado_sin_shell", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 11.0, "intentos_login": 3}
+
+# --- Lista CDB con CIDR (regla 100330) ---
+# Con "198.51.100.0/24:campaign-example" en etc/lists/honeypot-attackers y la lista registrada
+# en ossec.conf, esta linea de sshd debe dar 100330 (si da 5760, el CIDR no se esta aplicando):
+Oct 27 16:02:00 ip-172-31-33-195 sshd[1234]: Failed password for root from 198.51.100.77 port 4444 ssh2

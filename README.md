@@ -20,7 +20,7 @@ Status: phase 1 is done (infrastructure and 4 custom rules validated). Phase 2, 
 - Mistakes I caught by checking claims against the primary source or against my own tests, including predictions I got wrong (see [Findings](#findings) and [Phase 2 findings](#phase-2-findings)).
 - What each rule misses and where it gives false positives.
 - Three of the detections rewritten as portable Sigma rules, after checking what SigmaHQ already covers (see [Sigma versions](#sigma-versions)).
-- A honeypot integration: 28 more rules for a decoy SSH, HTTP and FTP server that is exposed to the internet. The first 15 were written from the traffic it received, including a low and slow brute force that my first rule missed and a file-name load order bug that silently disabled a whole rule file. The other 13 cover how each SSH connection ends and what attackers type, and are newer and less tested (see [`honeypot/`](honeypot/README.md)).
+- A honeypot integration: 32 more rules for a decoy SSH, HTTP and FTP server that is exposed to the internet. The first 15 were written from the traffic it received, including a low and slow brute force that my first rule missed and a file-name load order bug that silently disabled a whole rule file. The other 17 cover how each SSH connection ends, what attackers type, AI API probing and brute force followed by a login, and are newer and less tested (the last four, added on 27 October, are only checked in my own simulator so far) (see [`honeypot/`](honeypot/README.md)).
 
 ### Lab architecture
 
@@ -636,9 +636,9 @@ I used an AI assistant as a guide while building this and treated its output as 
 - [x] Coverage matrix in ATT&CK Navigator (layer in `navigator/`, ATT&CK v19 ids)
 - [x] Convert 2 or 3 rules to Sigma (three in `sigma/`, validated and converted to Splunk and Elasticsearch)
 - [ ] Rule for the Wazuh API spawning a shell (CVE-2025-24016, fixed in 4.9.1), after reading the original report
-- [x] Honeypot integration: 28 rules for SSH connections, attacker commands, HTTP and FTP traffic, with tests (see [`honeypot/`](honeypot/README.md))
+- [x] Honeypot integration: 32 rules for SSH connections, attacker commands, HTTP and FTP traffic, with tests (see [`honeypot/`](honeypot/README.md))
 - [ ] Add the port 22 and `exec` command results to the honeypot write-up once it has collected a few days of traffic
-- [ ] Rule for reading `/etc/shadow` (credential access, T1003.008). Today only the base command rule 100360 fires
+- [x] Rule for reading `/etc/shadow` (credential access, T1003.008): 100368, added on 27 October. Checked only in my Python simulator, not yet in the engine
 - [ ] Windows endpoint with Sysmon (later phase)
 - [ ] Per-rule write-up in English
 
@@ -684,7 +684,7 @@ Estado: la fase 1 está terminada (infraestructura y 4 reglas propias validadas)
 - Errores que detecté al contrastar afirmaciones con la fuente primaria o con mis propias pruebas, incluidas predicciones que me salieron mal (ver [Hallazgos](#hallazgos) y [Hallazgos de la fase 2](#hallazgos-de-la-fase-2)).
 - Qué se le escapa a cada regla y dónde da falsos positivos.
 - Tres de las detecciones reescritas como reglas Sigma portables, después de revisar qué cubre ya SigmaHQ (ver [Versiones en Sigma](#versiones-en-sigma)).
-- Una integración con un honeypot: 28 reglas más para un servidor señuelo SSH, HTTP y FTP expuesto a internet. Las primeras 15 se escribieron a partir del tráfico que recibió, e incluyen una fuerza bruta lenta que mi primera regla no vio y un error de orden de carga por nombre de archivo que desactivó en silencio un archivo entero de reglas. Las otras 13 cubren cómo termina cada conexión SSH y qué escriben los atacantes, y son más nuevas y están menos probadas (ver [`honeypot/`](honeypot/README.md)).
+- Una integración con un honeypot: 32 reglas más para un servidor señuelo SSH, HTTP y FTP expuesto a internet. Las primeras 15 se escribieron a partir del tráfico que recibió, e incluyen una fuerza bruta lenta que mi primera regla no vio y un error de orden de carga por nombre de archivo que desactivó en silencio un archivo entero de reglas. Las otras 17 cubren cómo termina cada conexión SSH, qué escriben los atacantes, sondeos de APIs de IA y fuerza bruta seguida de un login, y son más nuevas y están menos probadas (las últimas cuatro, agregadas el 27 de octubre, por ahora solo están comprobadas en mi propio simulador) (ver [`honeypot/`](honeypot/README.md)).
 
 ### Arquitectura del lab
 
@@ -1256,9 +1256,9 @@ Usé un asistente de IA como guía mientras armaba esto y traté su salida como 
 - [x] Matriz de cobertura en ATT&CK Navigator (capa en `navigator/`, IDs de ATT&CK v19)
 - [x] Convertir 2 o 3 reglas a formato Sigma (tres en `sigma/`, validadas y convertidas a Splunk y Elasticsearch)
 - [ ] Regla para la API de Wazuh lanzando una shell (CVE-2025-24016, corregida en 4.9.1), después de leer el reporte original
-- [x] Integración con un honeypot: 28 reglas para conexiones SSH, comandos de atacantes, tráfico HTTP y FTP, con pruebas (ver [`honeypot/`](honeypot/README.md))
+- [x] Integración con un honeypot: 32 reglas para conexiones SSH, comandos de atacantes, tráfico HTTP y FTP, con pruebas (ver [`honeypot/`](honeypot/README.md))
 - [ ] Agregar los resultados del puerto 22 y de los comandos `exec` a la documentación del honeypot cuando junte unos días de tráfico
-- [ ] Regla para la lectura de `/etc/shadow` (acceso a credenciales, T1003.008). Hoy solo dispara la regla base de comandos 100360
+- [x] Regla para la lectura de `/etc/shadow` (acceso a credenciales, T1003.008): 100368, agregada el 27 de octubre. Comprobada solo en mi simulador de Python, todavía no en el motor
 - [ ] Endpoint Windows con Sysmon (fase posterior)
 - [ ] Ficha por regla, en inglés
 

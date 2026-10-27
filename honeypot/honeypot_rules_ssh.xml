@@ -121,6 +121,26 @@
     <mitre><id>T1070.003</id><id>T1070.002</id></mitre>
   </rule>
 
+  <!-- Robo de credenciales locales: hashes de contrasenas. Va ANTES de 100367, que
+       tambien mira /etc/passwd pero es solo reconocimiento (nivel 5). -->
+  <rule id="100368" level="10">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)/etc/(shadow|gshadow|security/opasswd)</field>
+    <description>Honeypot: $(ip) intenta leer hashes de contrasenas ($(command)).</description>
+    <mitre><id>T1003.008</id></mitre>
+  </rule>
+
+  <!-- Verificacion de la shell: el bot ejecuta cuentas al azar ($((a*b+c))), funciones,
+       "set" con argumentos y marcadores check_<hash> para comprobar que hay un shell de verdad y no un
+       honeypot que repite comandos. Se ve en 80.94.92.179 (27 oct). Nivel 6: no daña nada,
+       pero es un cliente automatizado probando el entorno. Se evalua antes que 100367. -->
+  <rule id="100369" level="6">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(\bf?_?check_[0-9a-f]{16,}|\$\(\(\s*\d+\s*[*+\-]\s*\d+|\bset\s+--\s+\S*check_)</field>
+    <description>Honeypot: $(ip) verifica si la shell es real (aritmetica y marcadores al azar).</description>
+    <mitre><id>T1059.004</id></mitre>
+  </rule>
+
   <!-- Reconocimiento del sistema: lo primero que hace casi cualquier bot. -->
   <rule id="100367" level="5">
     <if_sid>100360</if_sid>

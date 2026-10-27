@@ -16,6 +16,7 @@
     <if_matched_sid>100301</if_matched_sid>
     <same_field>ip</same_field>
     <description>Honeypot: fuerza bruta SSH desde $(ip).</description>
+    <group>honeypot_bruteforce,</group>
     <mitre><id>T1110</id></mitre>
   </rule>
 
@@ -23,6 +24,7 @@
     <if_matched_sid>100301</if_matched_sid>
     <same_field>ip</same_field>
     <description>Honeypot: fuerza bruta SSH lenta desde $(ip).</description>
+    <group>honeypot_bruteforce,</group>
     <mitre><id>T1110</id></mitre>
   </rule>
 

@@ -13,7 +13,7 @@ This is lab work, not production.
 ### How it fits together
 
 ```
-attacker -> honeypot container -> logs/*.json (bind mount) -> Wazuh agent -> manager -> rules 100300 to 100367
+attacker -> honeypot container -> logs/*.json (bind mount) -> Wazuh agent -> manager -> rules 100300 to 100370
 ```
 
 Agent side, in `ossec.conf` of the honeypot instance:
@@ -34,10 +34,11 @@ Manager side: copy the rule files to `/var/ossec/etc/rules/`, check them with `w
 | File | Rules |
 |---|---|
 | `honeypot_rules.xml` | 100300 to 100320: SSH, shell commands and malware captures |
-| `honeypot_rules_http.xml` | 100340 to 100347: HTTP and FTP |
+| `honeypot_rules_http.xml` | 100340 to 100348: HTTP and FTP |
 | `honeypot_ioc_rules.xml` | 100330: failed logins from a known attacker IP |
 | `honeypot-attackers.example` | Format of the CDB list that rule 100330 reads |
-| `honeypot_rules_ssh.xml` | 100350 to 100367: how each SSH connection ended, and what the attacker types |
+| `honeypot_rules_ssh.xml` | 100350 to 100369: how each SSH connection ended, and what the attacker types |
+| `honeypot_rules_ssh_correlation.xml` | 100370: brute force followed by an accepted login. Separate file so it can be removed on its own |
 | `logtest_ssh_samples.txt` | Sample events to paste into `wazuh-logtest`, with the rule each one should fire |
 
 The name `honeypot_rules_http.xml` is deliberate. Wazuh loads rule files in alphabetical order and a child rule has to load after its parent. My first name, `honeypot_http_rules.xml`, sorted before `honeypot_rules.xml`, so the HTTP rules were loaded before the rule they depend on (100300) and were ignored. `honeypot_rules_ssh.xml` follows the same rule: it sorts after `honeypot_rules.xml`, so its parent (100300) is already loaded. More on that below.
@@ -61,6 +62,7 @@ The name `honeypot_rules_http.xml` is deliberate. Wazuh loads rule files in alph
 | 100345 | 5 | Probe for a known target: `wp-json`, `wp-login`, `xmlrpc.php`, `/.env`, `/.git`, `phpmyadmin`, `actuator`, `/solr`, `manager/html`, Jenkins, GeoServer (T1595.002) |
 | 100346 | 5 | 10 HTTP requests from the same IP in 120 s, `ignore="300"` (T1595) |
 | 100347 | 4 | FTP login as `anonymous` (T1078) |
+| 100348 | 6 | Probe for an AI model API: `/v1/models`, `/v1beta/models`, `/v1/chat/completions`, `/api/tags`, `/ollama/` (T1595.002) |
 | 100350 | 2 | Any SSH connection (base rule for the connection set, counted but not shown) |
 | 100351 | 3 | Scanner: the connection ended with no SSH banner or with a protocol error (T1595) |
 | 100352 | 6 | The honeypot accepted the login: result `autenticado_sin_shell`, `exec` or `shell` (T1078) |
@@ -74,6 +76,9 @@ The name `honeypot_rules_http.xml` is deliberate. Wazuh loads rule files in alph
 | 100365 | 7 | Touching cron: `crontab`, `/etc/cron`. It also matches the read-only `crontab -l` (T1053.003) |
 | 100366 | 8 | Covering tracks: `history -c`, `unset HISTFILE`, deleting logs (T1070.003, T1070.002) |
 | 100367 | 5 | System recon: `uname`, `/proc/cpuinfo`, `nproc`, `lscpu`, `/etc/passwd`, `whoami` (T1082, T1033) |
+| 100368 | 10 | Reading password hashes: `/etc/shadow`, `/etc/gshadow` (T1003.008). Evaluated before 100367 |
+| 100369 | 6 | Shell check: random arithmetic `$((a*b+c))`, `check_<hash>` markers, `set` with arguments (T1059.004). Evaluated before 100367 |
+| 100370 | 12 | An accepted login (100352) after a brute-force alert (100302 or 100303) from the same IP within 600 s (T1110.001, T1078) |
 
 Severity follows how much evidence there is. A login attempt or a plain GET is noise, a request to an exploit path shows intent, and a sample that VirusTotal confirms is proof.
 
@@ -146,7 +151,7 @@ I closed it with rule 100303 (5 attempts in 10 minutes, level 8). Tested two way
 
 On a fast burst both rules fire, first level 8 and then level 10, so severity escalates by itself.
 
-### The HTTP and FTP rules (100340 to 100347)
+### The HTTP and FTP rules (100340 to 100348)
 
 The first night showed what HTTP scanners send, but the first version of the pack only had SSH rules. I wrote the HTTP set after reading what had actually arrived: GPON exploit attempts, open proxy probes, a WebLogic handshake on an HTTP port and the usual hunt for WordPress and Jenkins.
 
@@ -160,7 +165,7 @@ Limits:
 - 100344 is level 3, the lowest that reaches the dashboard. I do not know yet whether it is more useful than noisy.
 - 100347 treats any anonymous FTP login as suspicious. On a honeypot that is fair, on a real FTP server it would not be.
 
-### SSH connections and commands (100350 to 100367)
+### SSH connections and commands (100350 to 100370)
 
 The honeypot records two things that no rule covered: how every SSH connection ends (`ssh_connections.json`) and what the attacker types, now including commands sent without a shell. The [honeypot README](https://github.com/TinchoLay/ssh-honeypot) explains how it records them. I wrote this set on 26 October from two numbers in the honeypot data: 802 connections that got in and left without a shell, and only 39 commands captured in total.
 
@@ -172,10 +177,24 @@ How it is built:
 - Level 12 rules reach the default email threshold of Wazuh. No email is configured here.
 
 Limits:
-- Reading `/etc/shadow` only reaches the base rule 100360. That is a known gap: it is credential access and it should alert.
+- `/etc/shadow` was a known gap (it only reached the base rule 100360) and 100368 closes it. It looks at the whole command text, so `cat /etc/shadow` and `cp /etc/shadow /tmp` both match.
+- 100369 also matches harmless arithmetic such as `echo $((2*3))`. On a honeypot nobody legitimate types that, on a real server it would be noise.
 - 100364 and 100365 are broad. `crontab -l` only reads and still alerts at level 7.
 - The banner list in 100353 is short, and a banner is trivial to fake.
 - The thresholds of 100354 (5 in 300 s) are a first guess.
+
+### Rules added on 27 October
+
+I read a day of real traffic (27 October) and added four rules from what it showed:
+
+- **100348, AI API probing.** HTTP requests for `/api/v1/models`, `/v1beta/models` and similar. The scanners look for an open model endpoint to use for free. It does not overlap with 100345, which I checked pattern by pattern.
+- **100368, password hashes.** It closes the `/etc/shadow` gap above. It sits before 100367 in the file, because the first sibling that matches wins and 100367 also reads `/etc/passwd`.
+- **100369, shell check.** One IP (80.94.92.179) came back twice, 1 h 45 min apart, and ran commands like `sh -c 'printf ... check_<32 hex> "$((956*983+35))"'`, a function, `set -- ...` and `$$`. As far as I can tell, it checks that the shell really computes before doing anything else. Before this rule those 26 commands only raised the base rule 100360, so it was a real detection gap. I tagged it T1059.004 (Unix shell). I first thought of T1497.001 (sandbox checks), but I cannot show that is what the bot wants, so I left it out.
+- **100370, brute force then success.** Same idea as the stock rule 40112. It lives in its own file because a child has to load after its parent (100352), and because I wrote it from memory of 40112, so I am less sure of its syntax than of the others. If `wazuh-analysisd -t` rejects it, remove that file and the rest still works. The honeypot accepts the password on the third attempt on purpose, so this rule fires on that design. On a real SSH server it would be a strong signal.
+
+To feed 100368 and 100370, rules 100302 and 100303 now also belong to the group `honeypot_bruteforce`. Nothing else about them changed.
+
+As far as I know a CDB list can hold a network in CIDR form (`77.239.124.0/24:campaign`), not only single IPs. I have not tested that yet: the check is the `wazuh-logtest` line at the end of `logtest_ssh_samples.txt`. The real list stays on the server and is not published here, because it has real attacker addresses. The `.example` file shows the CIDR format with a documentation range.
 
 ### Port 22
 
@@ -200,6 +219,12 @@ SSH connection and command rules (100350 to 100367), as of 26 October:
 - Checked only against my own Python simulator (42 events, Python's regex engine, not Wazuh's): 100350, 100352, 100362, 100363, 100365, 100366 and the group logic of 100354.
 - Not verified: 100352 and 100354 with real events, the order in which sibling rules are evaluated, and whether real `exec` commands look like what the patterns expect. `logtest_ssh_samples.txt` has a sample for each rule.
 
+Rules added on 27 October (100348, 100368, 100369, 100370):
+- Checked only against my own Python simulator (Python's regex engine, not Wazuh's): 100368 and 100369 in 51 of 52 SSH cases, and 100348 against 13 paths. The 52nd case was the old expectation that `cat /etc/shadow` stops at 100360, which is exactly what 100368 changes. 100369 was tested with commands rebuilt from the real ones.
+- Not verified: `wazuh-analysisd -t` on the four new files, `wazuh-logtest`, and live traffic. 100370 in particular needs a sequence of events (brute-force alert first, then an accepted login from the same IP) and I have not run one.
+
+Live on 27 October, after about 20 hours on port 22: 100351, 100352, 100353, 100354, 100360 and 100367 fired on real traffic. 100361 to 100366 did not fire once, so I still do not know if their patterns match what real bots send.
+
 Not isolated: whether `ignore="60"` suppresses repeats. The test sent 10 attempts, which cannot reach a second burst of 8, so it does not tell `ignore` apart from the frequency counter alone.
 
 Not verified: whether Filebeat sends duplicate alerts to the indexer after an alert file is shortened by hand, as I did when cleaning my own traffic. Also not measured yet: the full SSH rule set under a few days of real traffic on port 22.
@@ -215,7 +240,7 @@ Es trabajo de laboratorio, no de producción.
 ### Cómo encaja todo
 
 ```
-atacante -> contenedor honeypot -> logs/*.json (bind mount) -> agente Wazuh -> manager -> reglas 100300 a 100367
+atacante -> contenedor honeypot -> logs/*.json (bind mount) -> agente Wazuh -> manager -> reglas 100300 a 100370
 ```
 
 Del lado del agente, en el `ossec.conf` de la instancia del honeypot:
@@ -236,10 +261,11 @@ Del lado del manager: copiar los archivos de reglas a `/var/ossec/etc/rules/`, v
 | Archivo | Reglas |
 |---|---|
 | `honeypot_rules.xml` | 100300 a 100320: SSH, comandos de la shell y capturas de malware |
-| `honeypot_rules_http.xml` | 100340 a 100347: HTTP y FTP |
+| `honeypot_rules_http.xml` | 100340 a 100348: HTTP y FTP |
 | `honeypot_ioc_rules.xml` | 100330: logins fallidos desde una IP de atacante conocida |
 | `honeypot-attackers.example` | Formato de la lista CDB que lee la regla 100330 |
-| `honeypot_rules_ssh.xml` | 100350 a 100367: cómo terminó cada conexión SSH y qué escribe el atacante |
+| `honeypot_rules_ssh.xml` | 100350 a 100369: cómo terminó cada conexión SSH y qué escribe el atacante |
+| `honeypot_rules_ssh_correlation.xml` | 100370: fuerza bruta seguida de un login aceptado. Archivo aparte para poder sacarlo solo |
 | `logtest_ssh_samples.txt` | Eventos de ejemplo para pegar en `wazuh-logtest`, con la regla que debería disparar cada uno |
 
 El nombre `honeypot_rules_http.xml` es a propósito. Wazuh carga los archivos de reglas en orden alfabético y una regla hija tiene que cargarse después de su padre. Mi primer nombre, `honeypot_http_rules.xml`, quedaba antes que `honeypot_rules.xml`, así que las reglas HTTP se cargaban antes de la regla de la que dependen (100300) y se ignoraban. `honeypot_rules_ssh.xml` sigue la misma regla: queda después de `honeypot_rules.xml`, así que su padre (100300) ya está cargado. Más abajo está el detalle.
@@ -263,6 +289,7 @@ El nombre `honeypot_rules_http.xml` es a propósito. Wazuh carga los archivos de
 | 100345 | 5 | Búsqueda de un objetivo conocido: `wp-json`, `wp-login`, `xmlrpc.php`, `/.env`, `/.git`, `phpmyadmin`, `actuator`, `/solr`, `manager/html`, Jenkins, GeoServer (T1595.002) |
 | 100346 | 5 | 10 requests HTTP desde la misma IP en 120 s, `ignore="300"` (T1595) |
 | 100347 | 4 | Login FTP como `anonymous` (T1078) |
+| 100348 | 6 | Sondeo de una API de modelos de IA: `/v1/models`, `/v1beta/models`, `/v1/chat/completions`, `/api/tags`, `/ollama/` (T1595.002) |
 | 100350 | 2 | Cualquier conexión SSH (regla base del conjunto de conexiones, se cuenta pero no se muestra) |
 | 100351 | 3 | Scanner: la conexión terminó sin banner SSH o con un error de protocolo (T1595) |
 | 100352 | 6 | El honeypot aceptó el login: resultado `autenticado_sin_shell`, `exec` o `shell` (T1078) |
@@ -276,6 +303,9 @@ El nombre `honeypot_rules_http.xml` es a propósito. Wazuh carga los archivos de
 | 100365 | 7 | Tocar cron: `crontab`, `/etc/cron`. También coincide con `crontab -l`, que es solo lectura (T1053.003) |
 | 100366 | 8 | Borrar rastros: `history -c`, `unset HISTFILE`, borrar logs (T1070.003, T1070.002) |
 | 100367 | 5 | Reconocimiento del sistema: `uname`, `/proc/cpuinfo`, `nproc`, `lscpu`, `/etc/passwd`, `whoami` (T1082, T1033) |
+| 100368 | 10 | Lectura de hashes de contraseñas: `/etc/shadow`, `/etc/gshadow` (T1003.008). Se evalúa antes que 100367 |
+| 100369 | 6 | Verificación de la shell: aritmética al azar `$((a*b+c))`, marcadores `check_<hash>`, `set` con argumentos (T1059.004). Se evalúa antes que 100367 |
+| 100370 | 12 | Un login aceptado (100352) después de una alerta de fuerza bruta (100302 o 100303) desde la misma IP en 600 s (T1110.001, T1078) |
 
 La severidad sigue cuánta evidencia hay. Un intento de login o un GET simple es ruido, un request a una ruta de exploit muestra intención y una muestra que VirusTotal confirma es una prueba.
 
@@ -348,7 +378,7 @@ Lo cerré con la regla 100303 (5 intentos en 10 minutos, nivel 8). Probada de do
 
 En una ráfaga rápida saltan las dos reglas, primero la de nivel 8 y después la de nivel 10, así que la severidad escala sola.
 
-### Las reglas HTTP y FTP (100340 a 100347)
+### Las reglas HTTP y FTP (100340 a 100348)
 
 La primera noche mostró lo que mandan los scanners HTTP, pero la primera versión del pack solo tenía reglas de SSH. Escribí el conjunto HTTP después de leer lo que había llegado de verdad: intentos de exploit de GPON, sondeos de proxy abierto, un handshake de WebLogic en un puerto HTTP y la búsqueda de siempre de WordPress y Jenkins.
 
@@ -362,7 +392,7 @@ Límites:
 - 100344 es de nivel 3, el más bajo que llega al dashboard. Todavía no sé si es más útil que ruidosa.
 - 100347 trata cualquier login FTP anónimo como sospechoso. En un honeypot es razonable, en un servidor FTP real no.
 
-### Conexiones y comandos SSH (100350 a 100367)
+### Conexiones y comandos SSH (100350 a 100370)
 
 El honeypot registra dos cosas que ninguna regla cubría: cómo termina cada conexión SSH (`ssh_connections.json`) y lo que escribe el atacante, ahora incluyendo comandos enviados sin shell. El [README del honeypot](https://github.com/TinchoLay/ssh-honeypot) explica cómo los registra. Escribí este conjunto el 26 de octubre a partir de dos números de los datos del honeypot: 802 conexiones que entraron y se fueron sin una shell, y solo 39 comandos capturados en total.
 
@@ -374,10 +404,24 @@ Cómo está armado:
 - Las reglas de nivel 12 alcanzan el umbral de correo por defecto de Wazuh. Acá no hay correo configurado.
 
 Límites:
-- Leer `/etc/shadow` solo llega a la regla base 100360. Es un hueco conocido: es acceso a credenciales y debería alertar.
+- `/etc/shadow` era un hueco conocido (solo llegaba a la regla base 100360) y 100368 lo cierra. Mira todo el texto del comando, así que `cat /etc/shadow` y `cp /etc/shadow /tmp` coinciden los dos.
+- 100369 también coincide con aritmética inofensiva como `echo $((2*3))`. En un honeypot nadie legítimo escribe eso, en un servidor real sería ruido.
 - 100364 y 100365 son amplias. `crontab -l` solo lee y igual alerta en nivel 7.
 - La lista de banners de 100353 es corta, y un banner es trivial de falsificar.
 - Los umbrales de 100354 (5 en 300 s) son una primera estimación.
+
+### Reglas agregadas el 27 de octubre
+
+Leí un día de tráfico real (27 de octubre) y sumé cuatro reglas a partir de lo que mostró:
+
+- **100348, sondeo de APIs de IA.** Requests HTTP a `/api/v1/models`, `/v1beta/models` y parecidos. Los escáneres buscan un endpoint de modelos abierto para usarlo gratis. No se pisa con 100345, lo comprobé patrón por patrón.
+- **100368, hashes de contraseñas.** Cierra el hueco de `/etc/shadow` de arriba. Está antes que 100367 en el archivo, porque gana la primera hermana que coincide y 100367 también lee `/etc/passwd`.
+- **100369, verificación de la shell.** Una IP (80.94.92.179) volvió dos veces con 1 h 45 min de diferencia y corrió comandos como `sh -c 'printf ... check_<32 hex> "$((956*983+35))"'`, una función, `set -- ...` y `$$`. Hasta donde puedo ver, comprueba que la shell de verdad calcula antes de hacer otra cosa. Antes de esta regla esos 26 comandos solo levantaban la base 100360, o sea que era un hueco real de detección. La etiqueté T1059.004 (shell de Unix). Primero pensé en T1497.001 (chequeos de sandbox), pero no puedo demostrar que eso sea lo que busca el bot, así que la dejé afuera.
+- **100370, fuerza bruta y después éxito.** Misma idea que la regla de fábrica 40112. Está en su propio archivo porque una hija tiene que cargarse después de su padre (100352), y porque la escribí de memoria de la 40112, así que estoy menos seguro de su sintaxis que de las otras. Si `wazuh-analysisd -t` la rechaza, se saca ese archivo y el resto sigue andando. El honeypot acepta la contraseña en el tercer intento a propósito, así que esta regla salta por ese diseño. En un servidor SSH real sería una señal fuerte.
+
+Para alimentar 100368 y 100370, las reglas 100302 y 100303 ahora también pertenecen al grupo `honeypot_bruteforce`. No cambió nada más de ellas.
+
+Hasta donde sé, una lista CDB puede tener una red en formato CIDR (`77.239.124.0/24:campaign`), no solo IPs sueltas. Todavía no lo probé: la comprobación es la línea de `wazuh-logtest` al final de `logtest_ssh_samples.txt`. La lista real queda en el servidor y no se publica acá, porque tiene direcciones reales de atacantes. El archivo `.example` muestra el formato CIDR con un rango de documentación.
 
 ### Puerto 22
 
@@ -401,6 +445,12 @@ Reglas de conexión SSH y de comandos (100350 a 100367), al 26 de octubre:
 - En vivo: 100351 saltó con un scanner real después de reiniciar el manager.
 - Comprobado solo con mi propio simulador en Python (42 eventos, motor de regex de Python, no el de Wazuh): 100350, 100352, 100362, 100363, 100365, 100366 y la lógica de grupo de 100354.
 - No verificado: 100352 y 100354 con eventos reales, el orden en que se evalúan las reglas hermanas, y si los comandos `exec` reales se parecen a lo que esperan los patrones. `logtest_ssh_samples.txt` tiene un ejemplo para cada regla.
+
+Reglas agregadas el 27 de octubre (100348, 100368, 100369, 100370):
+- Comprobado solo con mi simulador en Python (motor de regex de Python, no el de Wazuh): 100368 y 100369 en 51 de 52 casos SSH, y 100348 contra 13 rutas. El caso 52 era la expectativa vieja de que `cat /etc/shadow` se quedaba en 100360, que es justo lo que cambia 100368. 100369 se probó con comandos reconstruidos a partir de los reales.
+- No verificado: `wazuh-analysisd -t` sobre los cuatro archivos, `wazuh-logtest` y tráfico en vivo. 100370 en particular necesita una secuencia de eventos (primero la alerta de fuerza bruta y después un login aceptado de la misma IP) y no corrí ninguna.
+
+En vivo el 27 de octubre, después de unas 20 horas en el puerto 22: 100351, 100352, 100353, 100354, 100360 y 100367 saltaron con tráfico real. 100361 a 100366 no saltaron ni una vez, así que todavía no sé si sus patrones coinciden con lo que mandan los bots reales.
 
 No aislado: si `ignore="60"` suprime las repeticiones. La prueba mandó 10 intentos, que no alcanzan para una segunda ráfaga de 8, así que no distingue `ignore` del contador de frecuencia solo.
 

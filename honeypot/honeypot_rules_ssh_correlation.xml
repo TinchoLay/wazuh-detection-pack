@@ -1,0 +1,19 @@
+<!-- Correlacion SSH. Archivo aparte, con nombre que ordena DESPUES de honeypot_rules_ssh.xml
+     (el punto va antes que el guion bajo): una regla hija tiene que cargarse despues de su
+     padre (100352). Si el manager no arranca por este archivo, se puede sacar sin tocar el resto. -->
+<group name="honeypot,ssh,">
+
+  <!-- Fuerza bruta seguida de un acceso aceptado desde la misma IP. Es el mismo modelo
+       que la regla 40112 de fabrica ("varios fallos y despues un exito").
+       Ojo con el honeypot: acepta la contrasena en el 3.er intento por diseno, asi que
+       aca "entro despues de forzar" es el comportamiento esperado, no una falla del
+       servidor. En un SSH real esto seria un incidente de nivel alto. -->
+  <rule id="100370" level="12" timeframe="600">
+    <if_sid>100352</if_sid>
+    <if_matched_group>honeypot_bruteforce</if_matched_group>
+    <same_field>ip</same_field>
+    <description>Honeypot: $(ip) entro despues de una fuerza bruta SSH (varios fallos y un exito).</description>
+    <mitre><id>T1110.001</id><id>T1078</id></mitre>
+  </rule>
+
+</group>
