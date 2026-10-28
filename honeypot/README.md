@@ -210,7 +210,7 @@ The fix is on the Wazuh side, so the honeypot keeps its format: in `/etc/filebea
 
 Status:
 - Verified: the template is loaded in the indexer with the new format.
-- Not verified yet: that alerts arrive. The index template only applies to indexes created after the change, so it needs the first daily index after 00:00 UTC on 28 October.
+- Verified on 28 October: the last Filebeat indexing error was at 23:53 UTC on 27 October, and the index created at 00:00 UTC holds the same alert counts per rule as `alerts.json` (for example 180 for 100369 in both).
 - Alerts from before the fix are not in the indexer. They are still in `alerts.json` and in the rotated `.json.gz` files, and could be re-sent. I have not done that.
 - A Wazuh upgrade may overwrite the template file, so this is a local change to remember.
 
@@ -241,7 +241,8 @@ Rules added on 27 October (100348, 100368, 100369, 100370):
 - `wazuh-analysisd -t` loads the four files with no errors. In `wazuh-logtest` all four gave the expected rule and level: 100348 (`/api/v1/models`), 100368 (`cat /etc/shadow`, ahead of 100367), 100369 (a command rebuilt from the real shell checks) and 100370. I had checked the patterns first in my Python simulator (51 of 52 cases; the 52nd was the old expectation that `cat /etc/shadow` stops at 100360, which 100368 changes).
 - The 100370 test was a sequence: 8 login attempts from one IP, then an accepted login. The fifth attempt fired 100303 (slow brute force) and the accepted login fired 100370. The eighth attempt did not fire 100302. My reading is that the event that fires 100303 is not counted again for 100302, so 100302 needs a ninth. It fits what I saw live earlier (ten attempts, one 100302), but I did not isolate it.
 - 100370 has `ignore="300"` because the campaign I saw reconnects hundreds of times, and without it every accepted login after a brute-force alert would raise a level 12 alert. That is a guess about the noise, not something I measured.
-- Not verified: these four rules on live traffic. The CIDR key in the CDB list was tested and does not match (see the list section); exact IPs do.
+- Live: 100348 fired 3 times on 27 October. On 28 October (UTC), 100369 fired 180 times, all from one IP (195.178.110.228) in 3 interactive sessions, and 100370 fired once (77.239.124.67). 100368 has not fired yet, because nobody has read `/etc/shadow`. 180 alerts for one visitor is a lot, so 100369 may need an `ignore`. The markers (`check_<hash>_small_math` and similar) have the same format as the ones 80.94.92.179 used on 27 October from another network. That suggests the same tool, but I only compared the markers.
+- The CIDR key in the CDB list was tested and does not match (see the list section); exact IPs do.
 
 Live on 27 October, after about 20 hours on port 22: 100351, 100352, 100353, 100354, 100360 and 100367 fired on real traffic. 100361 to 100366 did not fire once, so I still do not know if their patterns match what real bots send.
 
@@ -457,7 +458,7 @@ El arreglo es del lado de Wazuh, para que el honeypot conserve su formato: en `/
 
 Estado:
 - Verificado: la plantilla está cargada en el indexer con el formato nuevo.
-- Todavía no verificado: que lleguen las alertas. La plantilla solo se aplica a los índices creados después del cambio, así que hace falta el primer índice diario posterior a las 00:00 UTC del 28 de octubre.
+- Verificado el 28 de octubre: el último error de indexado de Filebeat fue a las 23:53 UTC del 27 de octubre, y el índice creado a las 00:00 UTC tiene los mismos conteos de alertas por regla que `alerts.json` (por ejemplo 180 para 100369 en los dos).
 - Las alertas anteriores al arreglo no están en el indexer. Siguen en `alerts.json` y en los `.json.gz` rotados, y se podrían reenviar. No lo hice.
 - Una actualización de Wazuh puede pisar el archivo de la plantilla, así que es un cambio local para recordar.
 
@@ -488,7 +489,8 @@ Reglas agregadas el 27 de octubre (100348, 100368, 100369, 100370):
 - `wazuh-analysisd -t` carga los cuatro archivos sin errores. En `wazuh-logtest` las cuatro dieron la regla y el nivel esperados: 100348 (`/api/v1/models`), 100368 (`cat /etc/shadow`, antes que 100367), 100369 (un comando reconstruido a partir de los chequeos reales de la shell) y 100370. Antes había comprobado los patrones en mi simulador de Python (51 de 52 casos; el 52 era la expectativa vieja de que `cat /etc/shadow` se quedaba en 100360, que 100368 cambia).
 - La prueba de 100370 fue una secuencia: 8 intentos de login desde una IP y después un login aceptado. El quinto intento disparó 100303 (fuerza bruta lenta) y el login aceptado disparó 100370. El octavo intento no disparó 100302. Mi lectura es que el evento que dispara 100303 no se cuenta de nuevo para 100302, así que 100302 necesita un noveno. Coincide con lo que vi en vivo antes (diez intentos, una 100302), pero no lo aislé.
 - 100370 tiene `ignore="300"` porque la campaña que vi reconecta cientos de veces, y sin eso cada login aceptado después de una alerta de fuerza bruta levantaría una alerta de nivel 12. Es una suposición sobre el ruido, no algo que haya medido.
-- No verificado: estas cuatro reglas con tráfico en vivo. La clave CIDR en la lista CDB se probó y no coincide (ver la sección de la lista); las IPs exactas sí.
+- En vivo: 100348 saltó 3 veces el 27 de octubre. El 28 de octubre (UTC), 100369 saltó 180 veces, todas desde una IP (195.178.110.228) en 3 sesiones interactivas, y 100370 saltó una vez (77.239.124.67). 100368 todavía no saltó, porque nadie leyó `/etc/shadow`. 180 alertas para un solo visitante es mucho, así que 100369 quizá necesite un `ignore`. Los marcadores (`check_<hash>_small_math` y parecidos) tienen el mismo formato que los que usó 80.94.92.179 el 27 de octubre desde otra red. Eso sugiere la misma herramienta, pero solo comparé los marcadores.
+- La clave CIDR en la lista CDB se probó y no coincide (ver la sección de la lista); las IPs exactas sí.
 
 En vivo el 27 de octubre, después de unas 20 horas en el puerto 22: 100351, 100352, 100353, 100354, 100360 y 100367 saltaron con tráfico real. 100361 a 100366 no saltaron ni una vez, así que todavía no sé si sus patrones coinciden con lo que mandan los bots reales.
 
