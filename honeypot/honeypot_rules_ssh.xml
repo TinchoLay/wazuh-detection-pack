@@ -133,8 +133,11 @@
   <!-- Verificacion de la shell: el bot ejecuta cuentas al azar ($((a*b+c))), funciones,
        "set" con argumentos y marcadores check_<hash> para comprobar que hay un shell de verdad y no un
        honeypot que repite comandos. Se ve en 80.94.92.179 (27 oct). Nivel 6: no daña nada,
-       pero es un cliente automatizado probando el entorno. Se evalua antes que 100367. -->
-  <rule id="100369" level="6">
+       pero es un cliente automatizado probando el entorno. Se evalua antes que 100367.
+       ignore="300": una sola IP (195.178.110.228) levanto 180 alertas el 28 oct en 3 sesiones.
+       El ignore vale para toda la regla, no por IP: mientras dura, otro visitante que haga
+       el mismo chequeo no genera alerta (el comando igual queda en shell_commands.json). -->
+  <rule id="100369" level="6" ignore="300">
     <if_sid>100360</if_sid>
     <field name="command" type="pcre2">(?i)(\bf?_?check_[0-9a-f]{16,}|\$\(\(\s*\d+\s*[*+\-]\s*\d+|\bset\s+--\s+\S*check_)</field>
     <description>Honeypot: $(ip) verifica si la shell es real (aritmetica y marcadores al azar).</description>
