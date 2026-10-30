@@ -15,8 +15,8 @@ dice el README, y despues correr esto.
 Cada caso sin "session" corre en un logtest nuevo (estado limpio). Los casos con la misma
 "session" comparten un solo logtest, para probar las reglas de frecuencia y de correlacion.
 
-Este programa se escribio sin acceso a un manager: el formato de salida de logtest que lee es el
-documentado (bloques "**Phase 1/2/3" con una linea "id: 'NNNNNN'"). Si en tu version el formato
+Se escribio sin acceso a un manager y la primera corrida real (Wazuh 4.14.8, 2026-10-30) paso sin
+cambios. El formato de salida de logtest que lee es el documentado (bloques "**Phase 1/2/3" con una linea "id: 'NNNNNN'"). Si en tu version el formato
 es otro, --verbose muestra la salida cruda y el unico cambio que hace falta esta en parsear_salida().
 """
 import argparse
