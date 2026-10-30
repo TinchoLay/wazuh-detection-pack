@@ -77,7 +77,7 @@
     <group>audit_command,command_and_control,</group>
   </rule>
 
-  <!-- v2: also accepts options fused to the path (-o/tmp/x, --output-document=/tmp/x) -->
+  <!-- v2: also accepts options fused to the path (-o/tmp/x, or the long output-document option written as output-document=/tmp/x) -->
   <rule id="100111" level="10">
     <if_sid>100110</if_sid>
     <regex type="pcre2">\sa\d+="(-{1,2}[\w-]*=?)?(/tmp|/var/tmp|/dev/shm)/</regex>

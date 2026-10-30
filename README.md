@@ -1,5 +1,7 @@
 # Wazuh Detection Pack | Linux detection engineering lab
 
+[![CI](https://github.com/TinchoLay/wazuh-detection-pack/actions/workflows/ci.yml/badge.svg)](https://github.com/TinchoLay/wazuh-detection-pack/actions/workflows/ci.yml)
+
 **[English](#english) | [Español](#español)**
 
 ---
@@ -563,6 +565,10 @@ Not done from this exercise, deliberately: I have not changed 100102 or 100201 t
 | Same, but running it from `/home/ubuntu` | None (full evasion) | Hypothesis |
 | Legitimate `#!` script run from `/tmp` | I expected 100102 (false positive). Measured with Atomic Red Team: it did not fire, auditd records `exe=/usr/bin/dash` | Measured, see validation above |
 | `echo $USER` | Probably nothing (shell builtin, no `execve`) | Hypothesis |
+
+### Automated checks
+
+`.github/workflows/ci.yml` runs on every push: static checks of all rule files (IDs, parents and load order, documentation, sample coverage, no third-party IPs), an offline model of the honeypot rules against their sample events, and a check that the ATT&CK Navigator layer matches `rules/local_rules.xml`. Details and limits are in [honeypot/README.md](honeypot/README.md#automated-checks). These checks do not replace the validation with Atomic Red Team described above, which is what proves the audit rules detect real behavior.
 
 ### How to reproduce
 
@@ -1183,6 +1189,10 @@ Lo que no hice a propósito: no cambié la 100102 ni la 100201 para cerrar los h
 | Lo mismo, pero ejecutándolo desde `/home/ubuntu` | Ninguna (evasión completa) | Hipótesis |
 | Script legítimo con `#!` ejecutado desde `/tmp` | Esperaba la 100102 (falso positivo). Medido con Atomic Red Team: no saltó, auditd registra `exe=/usr/bin/dash` | Medido, ver validación arriba |
 | `echo $USER` | Probablemente nada (comando interno de la shell, sin `execve`) | Hipótesis |
+
+### Chequeos automáticos
+
+`.github/workflows/ci.yml` corre en cada push: chequeos estáticos de todos los archivos de reglas (IDs, padres y orden de carga, documentación, cobertura de muestras, sin IPs de terceros), un modelo offline de las reglas del honeypot contra sus eventos de muestra, y una comprobación de que la capa de ATT&CK Navigator coincide con `rules/local_rules.xml`. Los detalles y los límites están en [honeypot/README.md](honeypot/README.md#chequeos-automáticos). Estos chequeos no reemplazan la validación con Atomic Red Team descrita más arriba, que es lo que prueba que las reglas de auditoría detectan comportamiento real.
 
 ### Cómo reproducirlo
 

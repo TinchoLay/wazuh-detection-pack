@@ -16,3 +16,7 @@ evidence/Captura de pantalla*.png
 
 *.bak
 *.bak.*
+
+# Python
+__pycache__/
+.pytest_cache/

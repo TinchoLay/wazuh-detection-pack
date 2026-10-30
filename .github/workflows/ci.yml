@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest==9.2.0
+      # IDs, parents and load order, documentation, sample coverage, no third-party IPs.
+      - name: Static checks
+        run: python tests/check_rules.py
+      # Offline model of the rules against the sample events, the logtest runner (with a fake
+      # logtest) and the ATT&CK layer. The real wazuh-logtest does not run here: see README.
+      - name: Tests
+        run: pytest -q tests
