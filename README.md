@@ -22,7 +22,7 @@ Status: phase 1 is done (infrastructure and 4 custom rules validated). Phase 2, 
 - Mistakes I caught by checking claims against the primary source or against my own tests, including predictions I got wrong (see [Findings](#findings) and [Phase 2 findings](#phase-2-findings)).
 - What each rule misses and where it gives false positives.
 - Three of the detections rewritten as portable Sigma rules, after checking what SigmaHQ already covers (see [Sigma versions](#sigma-versions)).
-- A honeypot integration: 32 more rules for a decoy SSH, HTTP and FTP server that is exposed to the internet. The first 15 were written from the traffic it received, including a low and slow brute force that my first rule missed and a file-name load order bug that silently disabled a whole rule file. The other 17 cover how each SSH connection ends, what attackers type, AI API probing and brute force followed by a login, and are newer and less tested (the last four were added on 27 October, and three of them have fired on real traffic since) (see [`honeypot/`](honeypot/README.md)).
+- A honeypot integration: 33 more rules for a decoy SSH, HTTP and FTP server that is exposed to the internet. The first 15 were written from the traffic it received, including a low and slow brute force that my first rule missed and a file-name load order bug that silently disabled a whole rule file. The other 17 cover how each SSH connection ends, what attackers type, AI API probing and brute force followed by a login, and are newer and less tested (the last four were added on 27 October, and three of them have fired on real traffic since) (see [`honeypot/`](honeypot/README.md)).
 
 ### Lab architecture
 
@@ -518,6 +518,7 @@ Before writing anything I searched the SigmaHQ repository. Two of my topics were
 | `lnx_auditd_ssh_authorized_keys_replaced.yml` | 100160 | T1098.004 | No equivalent upstream. Covers create and delete, including `sed -i` style rename-over |
 | `lnx_auditd_systemd_unit_deleted_or_created.yml` | 100170 | T1543.002 | Adds DELETE and restricts to unit suffixes. Complements `1bac86ba` |
 | `lnx_auditd_shell_history_deleted.yml` | 100200 | T1070.003 | Looks at the file event, so `history -w` (temp file plus rename) fires without a visible command |
+| `proc_creation_lnx_susp_cloud_and_ai_credential_hunting.yml` | 100371 | T1552.001, T1083 | No equivalent upstream (I searched SigmaHQ on 2 Nov 2026). Command-line version, so it needs process-creation telemetry. Written from honeypot traffic; not yet tested on a real host or sent upstream |
 
 What I checked: `sigma check` reports 0 errors and 0 issues on the three files, and `sigma convert` produces queries for Splunk and for Elasticsearch (Lucene). I ran the check with the two MITRE tag validators excluded (`-x attacktag -x d3_fendtag`) because they download data from the internet and my sandbox blocked it, so I checked the technique IDs by hand. I converted without a field-mapping pipeline, so the output uses the raw auditd field names; a real deployment would need a pipeline for its own schema. I did not run these queries against a live Splunk or Elastic.
 
@@ -642,7 +643,7 @@ I used an AI assistant as a guide while building this and treated its output as 
 - [x] Coverage matrix in ATT&CK Navigator (layer in `navigator/`, ATT&CK v19 ids)
 - [x] Convert 2 or 3 rules to Sigma (three in `sigma/`, validated and converted to Splunk and Elasticsearch)
 - [ ] Rule for the Wazuh API spawning a shell (CVE-2025-24016, fixed in 4.9.1), after reading the original report
-- [x] Honeypot integration: 32 rules for SSH connections, attacker commands, HTTP and FTP traffic, with tests (see [`honeypot/`](honeypot/README.md))
+- [x] Honeypot integration: 33 rules for SSH connections, attacker commands, HTTP and FTP traffic, with tests (see [`honeypot/`](honeypot/README.md))
 - [ ] Add the port 22 and `exec` command results to the honeypot write-up once it has collected a few days of traffic
 - [x] Rule for reading `/etc/shadow` (credential access, T1003.008): 100368, added on 27 October. It passed `wazuh-logtest` and has not fired on real traffic yet
 - [ ] Windows endpoint with Sysmon (later phase)
@@ -690,7 +691,7 @@ Estado: la fase 1 está terminada (infraestructura y 4 reglas propias validadas)
 - Errores que detecté al contrastar afirmaciones con la fuente primaria o con mis propias pruebas, incluidas predicciones que me salieron mal (ver [Hallazgos](#hallazgos) y [Hallazgos de la fase 2](#hallazgos-de-la-fase-2)).
 - Qué se le escapa a cada regla y dónde da falsos positivos.
 - Tres de las detecciones reescritas como reglas Sigma portables, después de revisar qué cubre ya SigmaHQ (ver [Versiones en Sigma](#versiones-en-sigma)).
-- Una integración con un honeypot: 32 reglas más para un servidor señuelo SSH, HTTP y FTP expuesto a internet. Las primeras 15 se escribieron a partir del tráfico que recibió, e incluyen una fuerza bruta lenta que mi primera regla no vio y un error de orden de carga por nombre de archivo que desactivó en silencio un archivo entero de reglas. Las otras 17 cubren cómo termina cada conexión SSH, qué escriben los atacantes, sondeos de APIs de IA y fuerza bruta seguida de un login, y son más nuevas y están menos probadas (las últimas cuatro se agregaron el 27 de octubre, y tres de ellas ya saltaron con tráfico real) (ver [`honeypot/`](honeypot/README.md)).
+- Una integración con un honeypot: 33 reglas más para un servidor señuelo SSH, HTTP y FTP expuesto a internet. Las primeras 15 se escribieron a partir del tráfico que recibió, e incluyen una fuerza bruta lenta que mi primera regla no vio y un error de orden de carga por nombre de archivo que desactivó en silencio un archivo entero de reglas. Las otras 17 cubren cómo termina cada conexión SSH, qué escriben los atacantes, sondeos de APIs de IA y fuerza bruta seguida de un login, y son más nuevas y están menos probadas (las últimas cuatro se agregaron el 27 de octubre, y tres de ellas ya saltaron con tráfico real) (ver [`honeypot/`](honeypot/README.md)).
 
 ### Arquitectura del lab
 
@@ -1142,6 +1143,7 @@ Antes de escribir nada busqué en el repositorio de SigmaHQ. Dos de mis temas ya
 | `lnx_auditd_ssh_authorized_keys_replaced.yml` | 100160 | T1098.004 | Sin equivalente en SigmaHQ. Cubre creación y borrado, incluido el reemplazo por rename tipo `sed -i` |
 | `lnx_auditd_systemd_unit_deleted_or_created.yml` | 100170 | T1543.002 | Agrega DELETE y limita a sufijos de unidad. Complementa a `1bac86ba` |
 | `lnx_auditd_shell_history_deleted.yml` | 100200 | T1070.003 | Mira el evento del archivo, así que `history -w` (archivo temporal más rename) dispara sin que haya un comando visible |
+| `proc_creation_lnx_susp_cloud_and_ai_credential_hunting.yml` | 100371 | T1552.001, T1083 | Sin equivalente en SigmaHQ (lo busqué el 2 de noviembre de 2026). Versión por línea de comandos, así que necesita telemetría de creación de procesos. Escrita a partir del tráfico del honeypot; todavía no probada en un host real ni enviada a SigmaHQ |
 
 Qué verifiqué: `sigma check` da 0 errores y 0 problemas en los tres archivos, y `sigma convert` genera consultas para Splunk y para Elasticsearch (Lucene). Corrí el chequeo excluyendo los dos validadores de etiquetas MITRE (`-x attacktag -x d3_fendtag`) porque descargan datos de internet y mi sandbox lo bloqueó, así que los IDs de técnica los revisé a mano. Convertí sin pipeline de mapeo de campos, por lo que la salida usa los nombres crudos de auditd; un despliegue real necesitaría un pipeline para su esquema. No ejecuté estas consultas en un Splunk o Elastic de verdad.
 
@@ -1266,7 +1268,7 @@ Usé un asistente de IA como guía mientras armaba esto y traté su salida como 
 - [x] Matriz de cobertura en ATT&CK Navigator (capa en `navigator/`, IDs de ATT&CK v19)
 - [x] Convertir 2 o 3 reglas a formato Sigma (tres en `sigma/`, validadas y convertidas a Splunk y Elasticsearch)
 - [ ] Regla para la API de Wazuh lanzando una shell (CVE-2025-24016, corregida en 4.9.1), después de leer el reporte original
-- [x] Integración con un honeypot: 32 reglas para conexiones SSH, comandos de atacantes, tráfico HTTP y FTP, con pruebas (ver [`honeypot/`](honeypot/README.md))
+- [x] Integración con un honeypot: 33 reglas para conexiones SSH, comandos de atacantes, tráfico HTTP y FTP, con pruebas (ver [`honeypot/`](honeypot/README.md))
 - [ ] Agregar los resultados del puerto 22 y de los comandos `exec` a la documentación del honeypot cuando junte unos días de tráfico
 - [x] Regla para la lectura de `/etc/shadow` (acceso a credenciales, T1003.008): 100368, agregada el 27 de octubre. Pasó `wazuh-logtest` y todavía no saltó con tráfico real
 - [ ] Endpoint Windows con Sysmon (fase posterior)

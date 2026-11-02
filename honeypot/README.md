@@ -37,7 +37,7 @@ Manager side: copy the rule files to `/var/ossec/etc/rules/`, check them with `w
 | `honeypot_rules_http.xml` | 100340 to 100348: HTTP and FTP |
 | `honeypot_ioc_rules.xml` | 100330: failed logins from a known attacker IP |
 | `honeypot-attackers.example` | Format of the CDB list that rule 100330 reads |
-| `honeypot_rules_ssh.xml` | 100350 to 100369: how each SSH connection ended, and what the attacker types |
+| `honeypot_rules_ssh.xml` | 100350 to 100369 and 100371: how each SSH connection ended, and what the attacker types |
 | `honeypot_rules_ssh_correlation.xml` | 100370: brute force followed by an accepted login. Separate file so it can be removed on its own |
 | `logtest_ssh_samples.txt` | SSH sample events with the rule each one should fire (`#@` annotations; paste by hand into `wazuh-logtest` or run `tests/run_logtest.py`) |
 | `logtest_http_samples.txt` | The same for the HTTP and FTP rules (100340 to 100348) |
@@ -79,6 +79,7 @@ The name `honeypot_rules_http.xml` is deliberate. Wazuh loads rule files in alph
 | 100367 | 5 | System recon: `uname`, `/proc/cpuinfo`, `nproc`, `lscpu`, `/etc/passwd`, `whoami` (T1082, T1033) |
 | 100368 | 10 | Reading password hashes: `/etc/shadow`, `/etc/gshadow` (T1003.008). Evaluated before 100367 |
 | 100369 | 6 | Shell check: random arithmetic `$((a*b+c))`, `check_<hash>` markers, `set` with arguments, `ignore="300"` (T1059.004). Evaluated before 100367 |
+| 100371 | 10 | Credential hunting: `~/.aws`, gcloud, key prefixes (`AKIA`, `sk-`, `sk-ant-`, `gsk_`, `pplx-`, `AIza`), wallets and seed phrases, `env` dumps with keys (T1552.001, T1083). Evaluated before 100367 |
 | 100370 | 12 | An accepted login (100352) after a brute-force alert (100302 or 100303) from the same IP within 600 s, `ignore="300"` (T1110.001, T1078) |
 
 Severity follows how much evidence there is. A login attempt or a plain GET is noise, a request to an exploit path shows intent, and a sample that VirusTotal confirms is proof.
@@ -192,6 +193,7 @@ I read a day of real traffic (27 October) and added four rules from what it show
 - **100368, password hashes.** It closes the `/etc/shadow` gap above. It sits before 100367 in the file, because the first sibling that matches wins and 100367 also reads `/etc/passwd`.
 - **100369, shell check.** One IP (80.94.x.x) came back twice, 1 h 45 min apart, and ran commands like `sh -c 'printf ... check_<32 hex> "$((956*983+35))"'`, a function, `set -- ...` and `$$`. As far as I can tell, it checks that the shell really computes before doing anything else. Before this rule those 26 commands only raised the base rule 100360, so it was a real detection gap. I tagged it T1059.004 (Unix shell). I first thought of T1497.001 (sandbox checks), but I cannot show that is what the bot wants, so I left it out.
 - **100370, brute force then success.** Same idea as the stock rule 40112. It lives in its own file because a child has to load after its parent (100352), and because I wrote it from memory of 40112, so I am less sure of its syntax than of the others. If `wazuh-analysisd -t` rejects it, remove that file and the rest still works. The honeypot accepts the password on the third attempt on purpose, so this rule fires on that design. On a real SSH server it would be a strong signal.
+- **100371, credential hunting.** On 1 and 2 November, two paramiko clients (5.0.0 and 5.1.0) from two IPs logged in with `ssh/test` and went looking for secrets. One ran `cat ~/.aws/credentials` three times, once an hour at :10. The other ran one script that walks `/root`, `/home`, `/var/www`, `/opt`, `/srv` and `/etc`, greps for AWS, OpenAI, Anthropic, Groq, Perplexity and Google key patterns, seed phrases and wallet addresses, and dumps environment variables with `AWS_`, `OPENAI`, `ANTHROPIC`, `GROQ` or `DEEPSEEK` in the name. None of my 32 rules covered it: it only reached the base rule 100360 or, because the script also runs `uname`, the recon rule 100367. The new rule sits before 100367. The key prefixes are matched case-sensitively so a word like `Asia` does not fire. Limits: a base64-encoded or split command does not match, and on a real server `cat ~/.aws/config` or `env | grep -i token` would be normal administration, so there it would need tuning. Status: it passes the static checks, the offline model and the new samples, and I have not run it in `wazuh-logtest` on the real manager yet. It has not fired live.
 
 To feed 100368 and 100370, rules 100302 and 100303 now also belong to the group `honeypot_bruteforce`. Nothing else about them changed.
 
@@ -305,7 +307,7 @@ Del lado del manager: copiar los archivos de reglas a `/var/ossec/etc/rules/`, v
 | `honeypot_rules_http.xml` | 100340 a 100348: HTTP y FTP |
 | `honeypot_ioc_rules.xml` | 100330: logins fallidos desde una IP de atacante conocida |
 | `honeypot-attackers.example` | Formato de la lista CDB que lee la regla 100330 |
-| `honeypot_rules_ssh.xml` | 100350 a 100369: cómo terminó cada conexión SSH y qué escribe el atacante |
+| `honeypot_rules_ssh.xml` | 100350 a 100369 y 100371: cómo terminó cada conexión SSH y qué escribe el atacante |
 | `honeypot_rules_ssh_correlation.xml` | 100370: fuerza bruta seguida de un login aceptado. Archivo aparte para poder sacarlo solo |
 | `logtest_ssh_samples.txt` | Eventos SSH de ejemplo con la regla que debería disparar cada uno (anotaciones `#@`; pegar a mano en `wazuh-logtest` o correr `tests/run_logtest.py`) |
 | `logtest_http_samples.txt` | Lo mismo para las reglas HTTP y FTP (100340 a 100348) |
@@ -347,6 +349,7 @@ El nombre `honeypot_rules_http.xml` es a propósito. Wazuh carga los archivos de
 | 100367 | 5 | Reconocimiento del sistema: `uname`, `/proc/cpuinfo`, `nproc`, `lscpu`, `/etc/passwd`, `whoami` (T1082, T1033) |
 | 100368 | 10 | Lectura de hashes de contraseñas: `/etc/shadow`, `/etc/gshadow` (T1003.008). Se evalúa antes que 100367 |
 | 100369 | 6 | Verificación de la shell: aritmética al azar `$((a*b+c))`, marcadores `check_<hash>`, `set` con argumentos, `ignore="300"` (T1059.004). Se evalúa antes que 100367 |
+| 100371 | 10 | Búsqueda de credenciales: `~/.aws`, gcloud, prefijos de claves (`AKIA`, `sk-`, `sk-ant-`, `gsk_`, `pplx-`, `AIza`), billeteras y frases semilla, volcados de `env` con claves (T1552.001, T1083). Se evalúa antes que 100367 |
 | 100370 | 12 | Un login aceptado (100352) después de una alerta de fuerza bruta (100302 o 100303) desde la misma IP en 600 s, `ignore="300"` (T1110.001, T1078) |
 
 La severidad sigue cuánta evidencia hay. Un intento de login o un GET simple es ruido, un request a una ruta de exploit muestra intención y una muestra que VirusTotal confirma es una prueba.
@@ -460,6 +463,7 @@ Leí un día de tráfico real (27 de octubre) y sumé cuatro reglas a partir de 
 - **100368, hashes de contraseñas.** Cierra el hueco de `/etc/shadow` de arriba. Está antes que 100367 en el archivo, porque gana la primera hermana que coincide y 100367 también lee `/etc/passwd`.
 - **100369, verificación de la shell.** Una IP (80.94.x.x) volvió dos veces con 1 h 45 min de diferencia y corrió comandos como `sh -c 'printf ... check_<32 hex> "$((956*983+35))"'`, una función, `set -- ...` y `$$`. Hasta donde puedo ver, comprueba que la shell de verdad calcula antes de hacer otra cosa. Antes de esta regla esos 26 comandos solo levantaban la base 100360, o sea que era un hueco real de detección. La etiqueté T1059.004 (shell de Unix). Primero pensé en T1497.001 (chequeos de sandbox), pero no puedo demostrar que eso sea lo que busca el bot, así que la dejé afuera.
 - **100370, fuerza bruta y después éxito.** Misma idea que la regla de fábrica 40112. Está en su propio archivo porque una hija tiene que cargarse después de su padre (100352), y porque la escribí de memoria de la 40112, así que estoy menos seguro de su sintaxis que de las otras. Si `wazuh-analysisd -t` la rechaza, se saca ese archivo y el resto sigue andando. El honeypot acepta la contraseña en el tercer intento a propósito, así que esta regla salta por ese diseño. En un servidor SSH real sería una señal fuerte.
+- **100371, búsqueda de credenciales.** El 1 y el 2 de noviembre, dos clientes paramiko (5.0.0 y 5.1.0) desde dos IPs entraron con `ssh/test` y fueron a buscar secretos. Uno ejecutó `cat ~/.aws/credentials` tres veces, una por hora a los :10. El otro corrió un solo script que recorre `/root`, `/home`, `/var/www`, `/opt`, `/srv` y `/etc`, busca patrones de claves de AWS, OpenAI, Anthropic, Groq, Perplexity y Google, frases semilla y direcciones de billeteras, y vuelca las variables de entorno que tienen `AWS_`, `OPENAI`, `ANTHROPIC`, `GROQ` o `DEEPSEEK` en el nombre. Ninguna de mis 32 reglas lo cubría: solo llegaba a la regla base 100360 o, como el script también ejecuta `uname`, a la de reconocimiento 100367. La regla nueva está antes que 100367. Los prefijos de claves se comparan distinguiendo mayúsculas, para que una palabra como `Asia` no dispare. Límites: un comando codificado en base64 o armado por partes no coincide, y en un servidor real `cat ~/.aws/config` o `env | grep -i token` sería administración normal, así que ahí habría que ajustarla. Estado: pasa los chequeos estáticos, el modelo offline y las muestras nuevas, y todavía no la corrí en `wazuh-logtest` en el manager real. No saltó en vivo.
 
 Para alimentar 100368 y 100370, las reglas 100302 y 100303 ahora también pertenecen al grupo `honeypot_bruteforce`. No cambió nada más de ellas.
 

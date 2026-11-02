@@ -149,3 +149,31 @@ Oct 27 16:02:00 ip-172-31-33-195 sshd[1234]: Failed password for root from 198.5
 #@ needs=cdb expect=5760
 Oct 27 16:02:00 ip-172-31-33-195 sshd[1234]: Failed password for root from 203.0.113.99 port 4444 ssh2
 
+
+# --- Regla 100371 (busqueda de credenciales), agregada el 2 de noviembre ---
+
+# (100371) lectura de ~/.aws/credentials. Se vio 3 veces, a las 06:10, 07:10 y 08:10 UTC del 1 de noviembre,
+# con "ssh/test" y un cliente paramiko. El resumen cortaba el final de la linea real (seguia con otro cat de ~/.aws).
+#@ expect=100371
+{"timestamp": "2026-11-01 06:10:14", "honeypot_event": "shell_command", "ip": "203.0.113.60", "command": "cat ~/.aws/credentials 2>/dev/null && echo __SEP__ && cat ~/.aws/config 2>/dev/null", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100371) script de cosecha de claves (2 de noviembre), recortado: se quito parte de la busqueda de archivos por extension.
+# Tambien contiene "uname", que dispararia 100367: 100371 tiene que ganarle.
+#@ expect=100371 not=100367
+{"timestamp": "2026-11-02 12:11:11", "honeypot_event": "shell_command", "ip": "203.0.113.61", "command": "\nOUT=/tmp/_hx;\n( echo \"== hostmeta\"; uname -a 2>/dev/null | head -c 120;\n  for d in /root /home /var/www /opt /srv /etc; do\n    [ -d \"$d\" ] && find \"$d\" -maxdepth 4 -type f -size -2M \\( -name \"*.json\" -o -name \"*.env\" -o -name \"credentials\" \\) 2>/dev/null\n  done | sort -u | head -2000 > $OUT.f;\n  grep -rHnE \"AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|gsk_[A-Za-z0-9]{20,}|pplx-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|ya29\\\\.|seed_phrase|wallet\\\\.dat|private_key|mnemonic_phrase\" $(cat $OUT.f) 2>/dev/null | head -80;\n  env 2>/dev/null | grep -Ei \"AWS_|GOOGLE|OPENAI|ANTHROPIC|GROQ|DEEPSEEK|API_KEY|SECRET|TOKEN\" | head -15;\n  ls /root/.aws /root/.config/gcloud /var/lib/docker 2>/dev/null | head -10;\n  rm -f $OUT.f ) 2>/dev/null\n", "canal": "exec", "nota": "Comando por canal exec"}
+
+# (100371) volcado del entorno buscando claves, sin nombrar archivos de la nube.
+#@ expect=100371
+{"timestamp": "2026-11-02 12:12:00", "honeypot_event": "shell_command", "ip": "203.0.113.62", "command": "env | grep -Ei api_key", "canal": "shell", "nota": ""}
+
+# Negativos de 100371: un comando de AWS sin tocar el archivo de credenciales no dispara la regla.
+#@ expect=100360 not=100371
+{"timestamp": "2026-11-02 12:13:00", "honeypot_event": "shell_command", "ip": "203.0.113.63", "command": "aws s3 ls", "canal": "shell", "nota": ""}
+
+# "Asia" con A mayuscula no es un prefijo de clave (el grupo de prefijos distingue mayusculas).
+#@ expect=100360 not=100371
+{"timestamp": "2026-11-02 12:13:30", "honeypot_event": "shell_command", "ip": "203.0.113.64", "command": "echo Asia/Buenos_Aires", "canal": "shell", "nota": ""}
+
+# Leer /etc/passwd sigue siendo reconocimiento (100367), no busqueda de credenciales de nube.
+#@ expect=100367 not=100371
+{"timestamp": "2026-11-02 12:14:00", "honeypot_event": "shell_command", "ip": "203.0.113.65", "command": "cat /etc/passwd", "canal": "shell", "nota": ""}

@@ -130,6 +130,21 @@
     <mitre><id>T1003.008</id></mitre>
   </rule>
 
+  <!-- Busqueda de credenciales: archivos de la nube (~/.aws, gcloud), claves de APIs de nube y de IA
+       (prefijos AKIA, sk-, sk-ant-, gsk_, pplx-, AIza), billeteras y frases semilla, y volcados del
+       entorno con claves. Se vio el 1 y el 2 de noviembre: "cat ~/.aws/credentials" cada hora y un
+       script que recorre /root, /home, /var/www, /opt, /srv y /etc buscando esos patrones. Va ANTES
+       de 100367: el script tambien corre "uname" y gana la primera hermana que coincide.
+       Los prefijos de claves van en un grupo que distingue mayusculas, para que "Asia" o
+       "ask-" no disparen. Limite: un comando codificado (base64) o armado por partes no coincide;
+       lo cubre la regla de comportamiento cuando exista. -->
+  <rule id="100371" level="10">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(\.aws(?:/(?:credentials|config)|\s|$)|\.config/gcloud|wallet\.dat|seed_phrase|mnemonic_phrase|(?:openai|anthropic|groq|deepseek)_\w*(?:key|token)|(?:\benv\b|printenv).*(?:api_key|secret|token)|(?-i:\bAKIA|\bsk-(?:ant-|\[|[A-Za-z0-9]{20})|\bgsk_|\bpplx-|\bAIza))</field>
+    <description>Honeypot: $(ip) busca credenciales (nube, APIs de IA o billeteras): $(command)</description>
+    <mitre><id>T1552.001</id><id>T1083</id></mitre>
+  </rule>
+
   <!-- Verificacion de la shell: el bot ejecuta cuentas al azar ($((a*b+c))), funciones,
        "set" con argumentos y marcadores check_<hash> para comprobar que hay un shell de verdad y no un
        honeypot que repite comandos. Se vio en 80.94.x.x (27 oct). Nivel 6: no daña nada,
