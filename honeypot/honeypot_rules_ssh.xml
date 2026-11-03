@@ -86,7 +86,7 @@
        solos ya no cuentan, y "xmrig" tampoco cuando va dentro de una lista de busqueda (grep -E "a|xmrig|b"):
        el 3 de noviembre un script que buscaba billeteras y configuraciones de mineros salio como "intenta
        correr un criptominero" (nivel 12) y tapo a 100371. Ahora el nombre del programa tiene que ir despues de un espacio, ";", "&", "(" o "/", y no puede ir pegado
-       a una barra "|" ni a letras (sin lookbehind: el motor de Wazuh rechazo esa sintaxis), y monero/nicehash tienen que ir junto a "pool". -->
+       a una barra "|" ni a letras (sin lookbehind ni lookahead, por precaucion), y monero/nicehash tienen que ir junto a "pool". -->
   <rule id="100362" level="12">
     <if_sid>100360</if_sid>
     <field name="command" type="pcre2">(?i)((?:^|[\s;&amp;(/])(?:xmrig|minerd|cpuminer)(?:[^|\w]|$)|stratum\+(tcp|ssl)|--donate-level|(?:nicehash|monero)\S*pool|pool\S*(?:nicehash|monero))</field>
