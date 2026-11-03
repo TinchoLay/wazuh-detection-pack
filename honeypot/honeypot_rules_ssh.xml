@@ -85,11 +85,11 @@
   <!-- Criptominero: nombres de programas y el protocolo stratum de los pools. "monero" y "nicehash"
        solos ya no cuentan, y "xmrig" tampoco cuando va dentro de una lista de busqueda (grep -E "a|xmrig|b"):
        el 3 de noviembre un script que buscaba billeteras y configuraciones de mineros salio como "intenta
-       correr un criptominero" (nivel 12) y tapo a 100371. Ahora el nombre del programa no puede ir pegado
-       a una barra "|" ni a letras, y monero/nicehash tienen que ir junto a "pool". -->
+       correr un criptominero" (nivel 12) y tapo a 100371. Ahora el nombre del programa tiene que ir despues de un espacio, ";", "&", "(" o "/", y no puede ir pegado
+       a una barra "|" ni a letras (sin lookbehind: el motor de Wazuh rechazo esa sintaxis), y monero/nicehash tienen que ir junto a "pool". -->
   <rule id="100362" level="12">
     <if_sid>100360</if_sid>
-    <field name="command" type="pcre2">(?i)((?&lt;![|\w-])(?:xmrig|minerd|cpuminer)(?![|\w])|stratum\+(tcp|ssl)|--donate-level|(?:nicehash|monero)\S*pool|pool\S*(?:nicehash|monero))</field>
+    <field name="command" type="pcre2">(?i)((?:^|[\s;&amp;(/])(?:xmrig|minerd|cpuminer)(?:[^|\w]|$)|stratum\+(tcp|ssl)|--donate-level|(?:nicehash|monero)\S*pool|pool\S*(?:nicehash|monero))</field>
     <description>Honeypot: $(ip) intenta correr un criptominero.</description>
     <mitre><id>T1496</id></mitre>
   </rule>
@@ -183,7 +183,7 @@
        100373 (va primero). -->
   <rule id="100374" level="9">
     <if_sid>100360</if_sid>
-    <field name="command" type="pcre2">(?i)((?:^|[\s/"'=])\.env(?:\.[\w*]+)?(?=[\s"';|&amp;)]|$)|wp-config\.php|\.my\.cnf|\.git-credentials|\.netrc|\.npmrc|\.pgpass|\.docker/config\.json|\.kube/config|\b(?:DB_PASS(?:WORD)?|MYSQL_ROOT_PASSWORD|SMTP_PASS|MAIL_PASSWORD|JWT_SECRET|REDIS_PASSWORD|MONGO_URI|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID)\b)</field>
+    <field name="command" type="pcre2">(?i)((?:^|[\s/"'=])\.env(?:\.[\w*]+)?(?:[\s"';|&amp;)]|$)|wp-config\.php|\.my\.cnf|\.git-credentials|\.netrc|\.npmrc|\.pgpass|\.docker/config\.json|\.kube/config|\b(?:DB_PASS(?:WORD)?|MYSQL_ROOT_PASSWORD|SMTP_PASS|MAIL_PASSWORD|JWT_SECRET|REDIS_PASSWORD|MONGO_URI|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID)\b)</field>
     <description>Honeypot: $(ip) busca archivos de configuracion con secretos (.env, wp-config, claves en variables).</description>
     <mitre><id>T1552.001</id><id>T1083</id></mitre>
   </rule>
