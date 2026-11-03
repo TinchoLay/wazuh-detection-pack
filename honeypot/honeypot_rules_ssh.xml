@@ -71,18 +71,25 @@
   </rule>
 
   <!-- Persistencia por clave SSH: el patron clasico de los bots (agregan su clave
-       publica a authorized_keys para volver a entrar). -->
+       publica a authorized_keys para volver a entrar). Solo cuenta ESCRIBIR: redireccion (>, >>),
+       tee, cp/mv/install, o una clave "ssh-rsa AAAA..." junto al archivo. Leerlo (cat, ls, for f in ...)
+       ya no dispara: el 3 de noviembre un script que solo leia ~/.ssh habria salido como "clave propia"
+       (nivel 12) por contener la palabra. Limite: sed -i o python que lo editen no coinciden. -->
   <rule id="100361" level="12">
     <if_sid>100360</if_sid>
-    <field name="command" type="pcre2">(?i)authorized_keys</field>
+    <field name="command" type="pcre2">(?i)(?:\x3e{1,2}\s*|\btee\s+(?:-a\s+)?|\b(?:cp|mv|install)\s+\S+\s+)\S*authorized_keys|(?s:ssh-(?:rsa|ed25519|dss)\s+AAAA.*authorized_keys)</field>
     <description>Honeypot: $(ip) intenta dejar una clave SSH propia (authorized_keys).</description>
     <mitre><id>T1098.004</id></mitre>
   </rule>
 
-  <!-- Criptominero: nombres de programas y el protocolo stratum de los pools. -->
+  <!-- Criptominero: nombres de programas y el protocolo stratum de los pools. "monero" y "nicehash"
+       solos ya no cuentan, y "xmrig" tampoco cuando va dentro de una lista de busqueda (grep -E "a|xmrig|b"):
+       el 3 de noviembre un script que buscaba billeteras y configuraciones de mineros salio como "intenta
+       correr un criptominero" (nivel 12) y tapo a 100371. Ahora el nombre del programa no puede ir pegado
+       a una barra "|" ni a letras, y monero/nicehash tienen que ir junto a "pool". -->
   <rule id="100362" level="12">
     <if_sid>100360</if_sid>
-    <field name="command" type="pcre2">(?i)(xmrig|minerd|cpuminer|stratum\+(tcp|ssl)|--donate-level|nicehash|monero)</field>
+    <field name="command" type="pcre2">(?i)((?&lt;![|\w-])(?:xmrig|minerd|cpuminer)(?![|\w])|stratum\+(tcp|ssl)|--donate-level|(?:nicehash|monero)\S*pool|pool\S*(?:nicehash|monero))</field>
     <description>Honeypot: $(ip) intenta correr un criptominero.</description>
     <mitre><id>T1496</id></mitre>
   </rule>
@@ -143,6 +150,51 @@
     <field name="command" type="pcre2">(?i)(\.aws(?:/(?:credentials|config)|\s|$)|\.config/gcloud|wallet\.dat|seed_phrase|mnemonic_phrase|(?:openai|anthropic|groq|deepseek)_\w*(?:key|token)|(?:\benv\b|printenv).*(?:api_key|secret|token)|(?-i:\bAKIA|\bsk-(?:ant-|\[|[A-Za-z0-9]{20})|\bgsk_|\bpplx-|\bAIza))</field>
     <description>Honeypot: $(ip) busca credenciales (nube, APIs de IA o billeteras): $(command)</description>
     <mitre><id>T1552.001</id><id>T1083</id></mitre>
+  </rule>
+
+  <!-- Credenciales por el servicio de metadatos de la nube (IMDS): pide un token y despues las
+       credenciales temporales del rol (AWS /latest/api/token e iam/security-credentials, Azure
+       identity/oauth2/token, GCP service-accounts/.../token, ECS 169.254.170.2/v2/credentials).
+       Se vio el 3 de noviembre en un script que probaba AWS, Azure, GCP y Oracle. Si el honeypot fuera
+       una instancia real, esas credenciales darian acceso con los permisos del rol. Va despues de 100371:
+       lo mas grave es la clave de larga duracion (archivo, API de IA, billetera) y el IMDS exige estar
+       ya dentro de la maquina. Va ANTES de 100367: el script tambien corre "uname". -->
+  <rule id="100372" level="10">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(iam/security-credentials|identity/oauth2/token|service-accounts/\S*/token|/latest/api/token|x-aws-ec2-metadata-token|169\.254\.170\.2/v2/credentials|AWS_CONTAINER_CREDENTIALS_(?:RELATIVE|FULL)_URI)</field>
+    <description>Honeypot: $(ip) pide credenciales al servicio de metadatos de la nube (IMDS).</description>
+    <mitre><id>T1552.005</id></mitre>
+  </rule>
+
+  <!-- Claves privadas SSH: ~/.ssh/id_*, id_rsa/id_ed25519, claves de host y bloques PRIVATE KEY.
+       known_hosts y authorized_keys solos no cuentan (no son secretos). Nivel 9: sirve para moverse
+       a otras maquinas, pero hace falta que la clave exista y que el destino la acepte. -->
+  <rule id="100373" level="9">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(\.ssh/(?:id_|identity)|\bid_(?:rsa|dsa|ecdsa|ed25519)\b|ssh_host_\w+_key|BEGIN (?:OPENSSH |RSA |EC |DSA )?PRIVATE KEY)</field>
+    <description>Honeypot: $(ip) busca claves privadas SSH.</description>
+    <mitre><id>T1552.004</id><id>T1083</id></mitre>
+  </rule>
+
+  <!-- Archivos de configuracion con secretos: .env, wp-config.php, .my.cnf, .git-credentials, .netrc, .npmrc,
+       .pgpass, ~/.docker/config.json, ~/.kube/config, y nombres de variables tipicas (DB_PASSWORD,
+       AWS_SECRET_ACCESS_KEY, JWT_SECRET...). Se vio el 3 de noviembre: find de .env/wp-config/docker-compose
+       y grep de esas variables. Nivel 9, igual que las claves SSH. Si un comando toca las dos cosas, gana
+       100373 (va primero). -->
+  <rule id="100374" level="9">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)((?:^|[\s/"'=])\.env(?:\.[\w*]+)?(?=[\s"';|&amp;)]|$)|wp-config\.php|\.my\.cnf|\.git-credentials|\.netrc|\.npmrc|\.pgpass|\.docker/config\.json|\.kube/config|\b(?:DB_PASS(?:WORD)?|MYSQL_ROOT_PASSWORD|SMTP_PASS|MAIL_PASSWORD|JWT_SECRET|REDIS_PASSWORD|MONGO_URI|AWS_SECRET_ACCESS_KEY|AWS_ACCESS_KEY_ID)\b)</field>
+    <description>Honeypot: $(ip) busca archivos de configuracion con secretos (.env, wp-config, claves en variables).</description>
+    <mitre><id>T1552.001</id><id>T1083</id></mitre>
+  </rule>
+
+  <!-- Solo tocar el servicio de metadatos (sin pedir credenciales): reconocimiento de la nube, nivel 7.
+       Incluye las direcciones de AWS/Azure/GCP/Oracle/Alibaba. Las que piden credenciales las agarra 100372. -->
+  <rule id="100375" level="7">
+    <if_sid>100360</if_sid>
+    <field name="command" type="pcre2">(?i)(169\.254\.169\.254|169\.254\.170\.2|fd00:ec2::254|192\.0\.0\.192|100\.100\.100\.200|metadata\.google\.internal|/metadata/instance|latest/meta-data|computeMetadata/v1)</field>
+    <description>Honeypot: $(ip) consulta el servicio de metadatos de la nube.</description>
+    <mitre><id>T1552.005</id></mitre>
   </rule>
 
   <!-- Verificacion de la shell: el bot ejecuta cuentas al azar ($((a*b+c))), funciones,
